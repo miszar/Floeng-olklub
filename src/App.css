@@ -1,0 +1,141 @@
+
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Plus, Image as ImageIcon, Star, Trash2, Search, Filter, SortAsc, Upload, Download, Beer, RefreshCw, LogIn, LogOut } from "lucide-react";
+import { createClient } from "@supabase/supabase-js";
+
+// Supabase opsætning – SKIFT til dine egne værdier:
+const SUPABASE_URL = "https://DITPROJECT.supabase.co";   // <-- sæt din URL
+const SUPABASE_ANON_KEY = "DIN_ANON_KEY";               // <-- sæt din key
+const CLUB_ID = "floeng-olklub"; // teknisk id – men UI viser "Fløng Ølklub"
+
+const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+function uuid() { return crypto.randomUUID(); }
+
+const defaultBeer = () => ({
+  id: uuid(),
+  createdAt: Date.now(),
+  name: "",
+  brewery: "",
+  style: "",
+  color: "",
+  price: "",
+  rating: 0,
+  notes: "",
+  photoDataUrl: "",
+});
+
+export default function BeerClubApp() {
+  const [user, setUser] = useState(null);
+  const [beers, setBeers] = useState([]);
+  const [draft, setDraft] = useState(defaultBeer());
+  const [query, setQuery] = useState("");
+  const [sortBy, setSortBy] = useState("created_at");
+  const [sortDir, setSortDir] = useState("desc");
+  const [styleFilter, setStyleFilter] = useState("alle");
+  const [ratingFilter, setRatingFilter] = useState(0);
+  const fileRef = useRef(null);
+
+  // Auth
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, session) => setUser(session?.user ?? null));
+    return () => sub?.subscription.unsubscribe();
+  }, []);
+
+  async function signIn(email) {
+    const { error } = await supabase.auth.signInWithOtp({ email, options: { emailRedirectTo: window.location.href } });
+    if (error) alert(error.message); else alert("Tjek din mail for login-link ✉️");
+  }
+  async function signOut(){ await supabase.auth.signOut(); }
+
+  // Load beers
+  async function loadBeers(){
+    const { data, error } = await supabase
+      .from("beers")
+      .select("*")
+      .eq("club_id", CLUB_ID)
+      .order(sortBy, { ascending: sortDir === "asc" });
+    if (error) { console.error(error); return; }
+    setBeers(data || []);
+  }
+  useEffect(()=>{ if (user) loadBeers(); }, [user, sortBy, sortDir]);
+
+  // Tilføj øl
+  async function addBeer(){
+    if (!draft.name.trim()) return alert("Giv øllen et navn først ✍️");
+    if (!user) return alert("Log ind først");
+
+    let photo_path = null;
+    if (draft.photoDataUrl) {
+      const file = dataURLtoFile(draft.photoDataUrl, `${uuid()}.jpg`);
+      const path = `${CLUB_ID}/${user.id}/${file.name}`;
+      const { error: upErr } = await supabase.storage.from("photos").upload(path, file, { upsert: true, contentType: "image/jpeg" });
+      if (upErr) { alert("Fejl ved upload: "+upErr.message); return; }
+      photo_path = path;
+    }
+
+    const { error } = await supabase.from("beers").insert({
+      club_id: CLUB_ID,
+      user_id: user.id,
+      name: draft.name,
+      brewery: draft.brewery || null,
+      style: draft.style || null,
+      color: draft.color || null,
+      price: draft.price || null,
+      rating: draft.rating || 0,
+      notes: draft.notes || null,
+      photo_path,
+    });
+    if (error) { alert(error.message); return; }
+    setDraft(defaultBeer());
+    if (fileRef.current) fileRef.current.value = "";
+    loadBeers();
+  }
+
+  const onPhotoChange = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = () => setDraft(d => ({ ...d, photoDataUrl: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
+  return (
+    <div style={{ padding: "1rem" }}>
+      <h1>Fløng Ølklub 🍻</h1>
+
+      {!user ? (
+        <div>
+          <input type="email" placeholder="din@mail.dk" onBlur={(e)=>signIn(e.target.value)} />
+          <p>(indtast din mail og tjek din indbakke for login-link)</p>
+        </div>
+      ) : (
+        <button onClick={signOut}>Log ud</button>
+      )}
+
+      <h2>Tilføj en øl</h2>
+      <input value={draft.name} onChange={e=>setDraft({...draft, name:e.target.value})} placeholder="Navn" />
+      <input value={draft.brewery} onChange={e=>setDraft({...draft, brewery:e.target.value})} placeholder="Bryggeri" />
+      <input value={draft.style} onChange={e=>setDraft({...draft, style:e.target.value})} placeholder="Stil" />
+      <input value={draft.price} onChange={e=>setDraft({...draft, price:e.target.value})} placeholder="Pris" />
+      <input type="file" ref={fileRef} onChange={onPhotoChange} />
+      <button onClick={addBeer}>Tilføj Øl</button>
+
+      <h2>Øllene</h2>
+      <ul>
+        {beers.map(b => (
+          <li key={b.id}>{b.name} – {b.brewery} – {b.rating}⭐</li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+// Hjælpefunktion
+function dataURLtoFile(dataUrl, filename){
+  const arr = dataUrl.split(','), mime = arr[0].match(/:(.*?);/)[1];
+  const bstr = atob(arr[1]); let n = bstr.length; const u8arr = new Uint8Array(n);
+  while(n--){ u8arr[n] = bstr.charCodeAt(n); }
+  return new File([u8arr], filename, { type: mime });
+}

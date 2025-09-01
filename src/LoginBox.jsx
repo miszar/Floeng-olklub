@@ -1,9 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useState, useEffect } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Brug dine eksisterende værdier her (enten ENV eller de konstante du allerede har)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://auiurmkojwpcbxarewdn.supabase.co";
-const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK";
+// Brug samme værdier som i App.jsx
+const SUPABASE_URL = "https://auiurmkojwpcbxarewdn.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK69y56R-KkvHzzcEfbwN2cmNqwtYwsHHA";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export default function LoginBox({ onLoggedIn }) {
@@ -26,7 +26,7 @@ export default function LoginBox({ onLoggedIn }) {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { shouldCreateUser: true } // opret bruger hvis ikke findes
+        options: { shouldCreateUser: true }, // opret bruger hvis ikke findes
       });
       if (error) throw error;
       setStep("verify");
@@ -45,7 +45,7 @@ export default function LoginBox({ onLoggedIn }) {
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token: code.trim(),
-        type: "email", // vigtigt for mail-OTP
+        type: "email", // mail-OTP
       });
       if (error) throw error;
       setMsg("Logget ind ✅");
@@ -57,54 +57,38 @@ export default function LoginBox({ onLoggedIn }) {
     }
   };
 
+  const box = { maxWidth: 420, margin: "40px auto", background: "#111", padding: 20, borderRadius: 16, border: "1px solid #2a2e39", color: "#fff" };
+  const input = { width: "100%", padding: 12, borderRadius: 10, border: "1px solid #333", background: "#0b0d12", color: "#fff" };
+  const btn = { width: "100%", padding: 12, borderRadius: 10 };
+
   return (
-    <div style={{ maxWidth: 420, margin: "40px auto", background: "#111", padding: 20, borderRadius: 16 }}>
+    <div style={box}>
       <h2 style={{ margin: 0, marginBottom: 12 }}>Log ind</h2>
 
-      {step === "request" && (
+      {step === "request" ? (
         <>
           <input
             type="email"
-            placeholder="Din email"
+            placeholder="din@mail.dk"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid #333", marginBottom: 10 }}
+            style={{ ...input, marginBottom: 10 }}
           />
-          <button
-            onClick={sendOtp}
-            disabled={busy || !email}
-            style={{ width: "100%", padding: 12, borderRadius: 10 }}
-          >
-            Send kode
-          </button>
+          <button onClick={sendOtp} disabled={busy || !email} style={btn}>Send kode</button>
         </>
-      )}
-
-      {step === "verify" && (
+      ) : (
         <>
-          <div style={{ fontSize: 14, opacity: 0.8, marginBottom: 8 }}>
-            Tjek din mail – indtast den 6-cifrede kode her:
-          </div>
+          <div style={{ fontSize: 14, opacity: .85, marginBottom: 8 }}>Indtast 6-cifret kode fra mailen:</div>
           <input
             inputMode="numeric"
             maxLength={6}
             placeholder="123456"
             value={code}
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
-            style={{ width: "100%", padding: 12, borderRadius: 10, border: "1px solid #333", letterSpacing: 3, textAlign: "center", marginBottom: 10 }}
+            style={{ ...input, letterSpacing: 3, textAlign: "center", marginBottom: 10 }}
           />
-          <button
-            onClick={verifyOtp}
-            disabled={busy || code.length < 6}
-            style={{ width: "100%", padding: 12, borderRadius: 10 }}
-          >
-            Log ind
-          </button>
-
-          <button
-            onClick={() => { setStep("request"); setCode(""); setMsg(""); }}
-            style={{ width: "100%", padding: 10, borderRadius: 10, marginTop: 8, background: "transparent", border: "1px solid #333", color: "#fff" }}
-          >
+          <button onClick={verifyOtp} disabled={busy || code.length < 6} style={btn}>Log ind</button>
+          <button onClick={() => { setStep("request"); setCode(""); setMsg(""); }} style={{ ...btn, marginTop: 8, background: "transparent", border: "1px solid #333", color: "#fff" }}>
             Tilbage / Skift mail
           </button>
         </>

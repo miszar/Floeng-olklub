@@ -3,24 +3,11 @@ import { createClient } from "@supabase/supabase-js";
 import Cropper from "react-easy-crop";
 import LoginBox from "./LoginBox.jsx";
 
-
 const SUPABASE_URL = "https://auiurmkojwpcbxarewdn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK69y56R-KkvHzzcEfbwN2cmNqwtYwsHHA";
 const CLUB_ID = "floeng-olklub";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-const [session, setSession] = useState(null);
-
-useEffect(() => {
-  supabase.auth.getSession().then(({ data }) => {
-    setSession(data.session ?? null);
-  });
-  const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
-    setSession(sess);
-  });
-  return () => sub.subscription.unsubscribe();
-}, []);
-
 
 /* ---------- helpers ---------- */
 function uuid() { return crypto.randomUUID(); }
@@ -35,7 +22,6 @@ async function getSignedUrl(path, ttlHours = 24 * 7) {
   const { data } = await supabase.storage.from("photos").createSignedUrl(path, 60 * 60 * ttlHours);
   return data?.signedUrl ?? null;
 }
-/* crop-helper (ingen sorte kanter) */
 async function getCroppedImg(imageSrc, cropPixels) {
   const image = await new Promise((resolve, reject) => {
     const img = new Image();
@@ -83,29 +69,26 @@ function Stars({ value = 0, onChange }) {
     </div>
   );
 }
-function EmailLogin({ onSubmit }) {
-  const [email, setEmail] = useState("");
-  return (
-    <div style={{ display: "flex", gap: 8 }}>
-      <input type="email" placeholder="din@mail.dk" value={email} onChange={(e) => setEmail(e.target.value)} style={input({ maxWidth: 220 })} />
-      <button onClick={() => onSubmit(email)} style={btn("primary")}>Log ind</button>
-    </div>
-  );
-}
 
 /* ---------- hovedkomponent ---------- */
 export default function App() {
-  /* auth */
   const [user, setUser] = useState(null);
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUser(s?.user ?? null));
-if (!user) {
-  return <LoginBox onLoggedIn={() => window.location.reload()} />;
-}
 
+  // --- auth ---
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data }) => {
+      setUser(data.session?.user ?? null);
+    });
+    const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => {
+      setUser(s?.user ?? null);
+    });
     return () => sub?.subscription.unsubscribe();
   }, []);
+
+  // Vis login-boks indtil der ER en bruger
+  if (!user) {
+    return <LoginBox onLoggedIn={() => window.location.reload()} />;
+  }
 
   async function signOut() { await supabase.auth.signOut(); }
 
@@ -120,7 +103,6 @@ if (!user) {
 
   // add-modal
   const [addOpen, setAddOpen] = useState(false);
-  // 👇 NY: color i draft
   const [draft, setDraft] = useState({ name: "", brewery: "", style: "", color: "", price: "", rating: 0, photoDataUrl: "" });
 
   // edit-modal
@@ -163,12 +145,10 @@ if (!user) {
   async function loadBeers() {
     let q = supabase
       .from("beers")
-      // 👇 NY: hent color med
       .select("id, name, brewery, style, color, price, rating, photo_path, created_at")
       .eq("club_id", CLUB_ID);
 
     if (search) {
-      // 👇 NY: søg også i color
       q = q.or(`name.ilike.%${search}%,brewery.ilike.%${search}%,style.ilike.%${search}%,color.ilike.%${search}%`);
     }
 
@@ -176,7 +156,6 @@ if (!user) {
     if (error) { alert(error.message); return; }
     setBeers(data || []);
 
-    // hent signerede URLs
     const entries = await Promise.all((data || []).map(async (b) => [b.id, await getSignedUrl(b.photo_path)]));
     setPhotoUrls(Object.fromEntries(entries));
   }
@@ -203,14 +182,13 @@ if (!user) {
       name: draft.name,
       brewery: draft.brewery || null,
       style: draft.style || null,
-      color: draft.color || null,              // 👈 NY
+      color: draft.color || null,
       price: draft.price || null,
       rating: draft.rating || 0,
       photo_path
     });
     if (error) { alert(error.message); return; }
 
-    // 👇 NY: resetter også color
     setDraft({ name: "", brewery: "", style: "", color: "", price: "", rating: 0, photoDataUrl: "" });
     setAddOpen(false);
     await loadBeers();
@@ -233,7 +211,7 @@ if (!user) {
         name: editDraft.name,
         brewery: editDraft.brewery || null,
         style: editDraft.style || null,
-        color: editDraft.color || null,        // 👈 NY
+        color: editDraft.color || null,
         price: editDraft.price || null,
         rating: editDraft.rating ?? 0,
         photo_path
@@ -255,17 +233,17 @@ if (!user) {
   }
 
   /* layout-konstanter */
-  const IMG_W = 140, IMG_H = 220;          // øl-kort billede (portræt)
-  const PORTRAIT_ASPECT = IMG_W / IMG_H;   // til cropper
-  const COVER_H = 180, COVER_ASPECT = 3;   // cover (aflangt 3:1)
+  const IMG_W = 140, IMG_H = 220;
+  const PORTRAIT_ASPECT = IMG_W / IMG_H;
+  const COVER_H = 180, COVER_ASPECT = 3;
 
   return (
     <div style={{ minHeight: "100vh", background: "#0f1115", color: "white" }}>
       <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        {/* Titel + login */}
+        {/* Titel + logout */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <h1 style={{ fontSize: 40, fontWeight: 800, margin: 0 }}>Fløng Ølklub 🍻</h1>
-          {user ? <button onClick={signOut} style={btn("ghost-sm")}>Log ud</button> : <EmailLogin onSubmit={signIn} />}
+          <button onClick={signOut} style={btn("ghost-sm")}>Log ud</button>
         </div>
 
         {/* Cover */}
@@ -279,30 +257,26 @@ if (!user) {
         >
           {!coverUrl && "(intet cover)"}
         </div>
-        {user && (
-          <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
-            <input
-              ref={coverFileRef} type="file" accept="image/*" style={{ display: "none" }}
-              onChange={(e) => {
-                const f = e.target.files?.[0]; if (!f) return;
-                const r = new FileReader();
-                r.onload = () => { setCropSrc(r.result); setCropFor("cover"); setCropOpen(true); setZoom(1); setCrop({ x: 0, y: 0 }); };
-                r.readAsDataURL(f);
-              }}
-            />
-            <button onClick={() => coverFileRef.current?.click()} style={btn("ghost-sm")}>Skift cover</button>
-          </div>
-        )}
+        <div style={{ marginTop: 6, display: "flex", justifyContent: "flex-end" }}>
+          <input
+            ref={coverFileRef} type="file" accept="image/*" style={{ display: "none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]; if (!f) return;
+              const r = new FileReader();
+              r.onload = () => { setCropSrc(r.result); setCropFor("cover"); setCropOpen(true); setZoom(1); setCrop({ x: 0, y: 0 }); };
+              r.readAsDataURL(f);
+            }}
+          />
+          <button onClick={() => coverFileRef.current?.click()} style={btn("ghost-sm")}>Skift cover</button>
+        </div>
 
         {/* Topbar: Tilføj + Søg */}
-        {user && (
-          <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-            <button onClick={() => setAddOpen(true)} style={btn("primary")}>Tilføj Øl</button>
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg øl…" style={{ ...input(), maxWidth: 260 }} />
-          </div>
-        )}
+        <div style={{ marginTop: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <button onClick={() => setAddOpen(true)} style={btn("primary")}>Tilføj Øl</button>
+          <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Søg øl…" style={{ ...input(), maxWidth: 260 }} />
+        </div>
 
-        {/* Sortering under topbar */}
+        {/* Sortering */}
         <div style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}>
           <span style={{ opacity: .8 }}>Sorter:</span>
           <select value={sortBy} onChange={(e) => setSortBy(e.target.value)} style={input()}>
@@ -318,7 +292,7 @@ if (!user) {
           </select>
         </div>
 
-        {/* Liste med øl – portræt-kort */}
+        {/* Liste */}
         <section style={{ marginTop: 16 }}>
           {beers.length === 0 ? (
             <div style={{ opacity: .7 }}>Ingen øl endnu – brug “Tilføj Øl” 🍺</div>
@@ -340,7 +314,6 @@ if (!user) {
                     {/* højre: tekst */}
                     <div style={{ flex: 1, minWidth: 200, padding: 12 }}>
                       <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 2 }}>{b.name || "(uden navn)"}</div>
-                      {/* 👇 NY: vis Farve sammen med stil */}
                       <div style={{ opacity: .9, fontSize: 16 }}>
                         {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b> {b.color || "—"}
                       </div>
@@ -350,7 +323,6 @@ if (!user) {
                         <button
                           onClick={() => {
                             setEditing(b);
-                            // 👇 NY: tag color med ind i editDraft
                             setEditDraft({ name: b.name || "", brewery: b.brewery || "", style: b.style || "", color: b.color || "", price: b.price || "", rating: b.rating || 0, photoDataUrl: "" });
                           }}
                           style={btn("ghost-sm")}
@@ -377,7 +349,6 @@ if (!user) {
               <input style={input()} placeholder="Navn*" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
               <input style={input()} placeholder="Bryggeri" value={draft.brewery} onChange={(e) => setDraft({ ...draft, brewery: e.target.value })} />
               <input style={input()} placeholder="Stil" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
-              {/* 👇 NY: Farve felt */}
               <input style={input()} placeholder="Farve (fx Gylden / Amber / Mørk)" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} />
               <input style={input()} placeholder="Pris" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} />
               <div style={{ display: "flex", alignItems: "center" }}>
@@ -412,7 +383,6 @@ if (!user) {
               <input style={input()} placeholder="Navn" value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} />
               <input style={input()} placeholder="Bryggeri" value={editDraft.brewery} onChange={(e) => setEditDraft({ ...editDraft, brewery: e.target.value })} />
               <input style={input()} placeholder="Stil" value={editDraft.style} onChange={(e) => setEditDraft({ ...editDraft, style: e.target.value })} />
-              {/* 👇 NY: Farve i redigering */}
               <input style={input()} placeholder="Farve" value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} />
               <input style={input()} placeholder="Pris" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} />
               <div style={{ display: "flex", alignItems: "center" }}>

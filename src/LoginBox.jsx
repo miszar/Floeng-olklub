@@ -1,24 +1,16 @@
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 
-// Brug samme værdier som i App.jsx
 const SUPABASE_URL = "https://auiurmkojwpcbxarewdn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK69y56R-KkvHzzcEfbwN2cmNqwtYwsHHA";
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-export default function LoginBox({ onLoggedIn }) {
+export default function LoginBox() {
   const [step, setStep] = useState("request"); // request | verify
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
-
-  useEffect(() => {
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      if (session) onLoggedIn?.(session);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [onLoggedIn]);
 
   const sendOtp = async () => {
     if (!email) return;
@@ -26,7 +18,7 @@ export default function LoginBox({ onLoggedIn }) {
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { shouldCreateUser: true }, // opret bruger hvis ikke findes
+        options: { shouldCreateUser: true },
       });
       if (error) throw error;
       setStep("verify");
@@ -42,14 +34,14 @@ export default function LoginBox({ onLoggedIn }) {
     if (!email || code.length < 6) return;
     setBusy(true); setMsg("");
     try {
-      const { data, error } = await supabase.auth.verifyOtp({
+      const { error } = await supabase.auth.verifyOtp({
         email,
         token: code.trim(),
-        type: "email", // mail-OTP
+        type: "email",
       });
       if (error) throw error;
+      // INGEN reload. App.jsx lytter på auth og skifter UI automatisk.
       setMsg("Logget ind ✅");
-      onLoggedIn?.(data.session);
     } catch (e) {
       setMsg(e.message || "Forkert kode?");
     } finally {

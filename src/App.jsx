@@ -2,7 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Cropper from "react-easy-crop";
 
-
 const SUPABASE_URL = "https://auiurmkojwpcbxarewdn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK69y56R-KkvHzzcEfbwN2cmNqwtYwsHHA";
 const CLUB_ID = "floeng-olklub";
@@ -109,7 +108,8 @@ export default function App() {
 
   // add-modal
   const [addOpen, setAddOpen] = useState(false);
-  const [draft, setDraft] = useState({ name: "", brewery: "", style: "", price: "", rating: 0, photoDataUrl: "" });
+  // 👇 NY: color i draft
+  const [draft, setDraft] = useState({ name: "", brewery: "", style: "", color: "", price: "", rating: 0, photoDataUrl: "" });
 
   // edit-modal
   const [editing, setEditing] = useState(null);
@@ -146,17 +146,18 @@ export default function App() {
 
   /* load data */
   useEffect(() => { if (user) loadBeers(); }, [user, sortBy, sortDir, search]);
-  useEffect(() => { if (user) loadCover(); }, [user]); // kun når login/brugersession ændrer sig
+  useEffect(() => { if (user) loadCover(); }, [user]);
 
   async function loadBeers() {
     let q = supabase
       .from("beers")
-      .select("id, name, brewery, style, price, rating, photo_path, created_at")
+      // 👇 NY: hent color med
+      .select("id, name, brewery, style, color, price, rating, photo_path, created_at")
       .eq("club_id", CLUB_ID);
 
     if (search) {
-      // søg i navn/bryggeri/stil
-      q = q.or(`name.ilike.%${search}%,brewery.ilike.%${search}%,style.ilike.%${search}%`);
+      // 👇 NY: søg også i color
+      q = q.or(`name.ilike.%${search}%,brewery.ilike.%${search}%,style.ilike.%${search}%,color.ilike.%${search}%`);
     }
 
     const { data, error } = await q.order(sortBy, { ascending: sortDir === "asc" });
@@ -187,12 +188,18 @@ export default function App() {
 
     const { error } = await supabase.from("beers").insert({
       club_id: CLUB_ID,
-      name: draft.name, brewery: draft.brewery || null, style: draft.style || null,
-      price: draft.price || null, rating: draft.rating || 0, photo_path
+      name: draft.name,
+      brewery: draft.brewery || null,
+      style: draft.style || null,
+      color: draft.color || null,              // 👈 NY
+      price: draft.price || null,
+      rating: draft.rating || 0,
+      photo_path
     });
     if (error) { alert(error.message); return; }
 
-    setDraft({ name: "", brewery: "", style: "", price: "", rating: 0, photoDataUrl: "" });
+    // 👇 NY: resetter også color
+    setDraft({ name: "", brewery: "", style: "", color: "", price: "", rating: 0, photoDataUrl: "" });
     setAddOpen(false);
     await loadBeers();
   }
@@ -211,8 +218,13 @@ export default function App() {
 
     const { error } = await supabase.from("beers")
       .update({
-        name: editDraft.name, brewery: editDraft.brewery || null, style: editDraft.style || null,
-        price: editDraft.price || null, rating: editDraft.rating ?? 0, photo_path
+        name: editDraft.name,
+        brewery: editDraft.brewery || null,
+        style: editDraft.style || null,
+        color: editDraft.color || null,        // 👈 NY
+        price: editDraft.price || null,
+        rating: editDraft.rating ?? 0,
+        photo_path
       })
       .eq("id", editing.id);
     if (error) { alert(error.message); return; }
@@ -316,11 +328,23 @@ export default function App() {
                     {/* højre: tekst */}
                     <div style={{ flex: 1, minWidth: 200, padding: 12 }}>
                       <div style={{ fontWeight: 800, fontSize: 22, marginBottom: 2 }}>{b.name || "(uden navn)"}</div>
-                      <div style={{ opacity: .9, fontSize: 16 }}>{b.brewery || "—"} • {b.style || "—"}</div>
+                      {/* 👇 NY: vis Farve sammen med stil */}
+                      <div style={{ opacity: .9, fontSize: 16 }}>
+                        {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b> {b.color || "—"}
+                      </div>
                       <div style={{ opacity: .85, marginTop: 6, fontSize: 16 }}>Pris: {b.price || "—"}</div>
                       <div style={{ marginTop: 8 }}><Stars value={b.rating ?? 0} onChange={() => {}} /></div>
                       <div style={{ marginTop: 8, display: "flex", gap: 8, flexWrap: "wrap" }}>
-                        <button onClick={() => { setEditing(b); setEditDraft({ name: b.name || "", brewery: b.brewery || "", style: b.style || "", price: b.price || "", rating: b.rating || 0, photoDataUrl: "" }); }} style={btn("ghost-sm")}>Redigér</button>
+                        <button
+                          onClick={() => {
+                            setEditing(b);
+                            // 👇 NY: tag color med ind i editDraft
+                            setEditDraft({ name: b.name || "", brewery: b.brewery || "", style: b.style || "", color: b.color || "", price: b.price || "", rating: b.rating || 0, photoDataUrl: "" });
+                          }}
+                          style={btn("ghost-sm")}
+                        >
+                          Redigér
+                        </button>
                         <button onClick={() => deleteBeer(b)} style={btn("danger-sm")}>Slet</button>
                       </div>
                     </div>
@@ -341,16 +365,22 @@ export default function App() {
               <input style={input()} placeholder="Navn*" value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} />
               <input style={input()} placeholder="Bryggeri" value={draft.brewery} onChange={(e) => setDraft({ ...draft, brewery: e.target.value })} />
               <input style={input()} placeholder="Stil" value={draft.style} onChange={(e) => setDraft({ ...draft, style: e.target.value })} />
+              {/* 👇 NY: Farve felt */}
+              <input style={input()} placeholder="Farve (fx Gylden / Amber / Mørk)" value={draft.color} onChange={(e) => setDraft({ ...draft, color: e.target.value })} />
               <input style={input()} placeholder="Pris" value={draft.price} onChange={(e) => setDraft({ ...draft, price: e.target.value })} />
               <div style={{ display: "flex", alignItems: "center" }}>
                 <Stars value={draft.rating} onChange={(v) => setDraft({ ...draft, rating: v })} />
               </div>
-              <input ref={addFileRef} type="file" accept="image/*" onChange={(e) => {
-                const f = e.target.files?.[0]; if (!f) return;
-                const r = new FileReader();
-                r.onload = () => { setCropSrc(r.result); setCropFor("create"); setCropOpen(true); setZoom(1); setCrop({ x: 0, y: 0 }); };
-                r.readAsDataURL(f);
-              }} style={{ ...input(), gridColumn: "1 / -1" }} />
+              <input
+                ref={addFileRef} type="file" accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]; if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => { setCropSrc(r.result); setCropFor("create"); setCropOpen(true); setZoom(1); setCrop({ x: 0, y: 0 }); };
+                  r.readAsDataURL(f);
+                }}
+                style={{ ...input(), gridColumn: "1 / -1" }}
+              />
             </div>
             {draft.photoDataUrl && <img alt="preview" src={draft.photoDataUrl} style={{ marginTop: 12, width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 12, border: "1px solid #333" }} />}
             <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>
@@ -370,16 +400,22 @@ export default function App() {
               <input style={input()} placeholder="Navn" value={editDraft.name} onChange={(e) => setEditDraft({ ...editDraft, name: e.target.value })} />
               <input style={input()} placeholder="Bryggeri" value={editDraft.brewery} onChange={(e) => setEditDraft({ ...editDraft, brewery: e.target.value })} />
               <input style={input()} placeholder="Stil" value={editDraft.style} onChange={(e) => setEditDraft({ ...editDraft, style: e.target.value })} />
+              {/* 👇 NY: Farve i redigering */}
+              <input style={input()} placeholder="Farve" value={editDraft.color} onChange={(e) => setEditDraft({ ...editDraft, color: e.target.value })} />
               <input style={input()} placeholder="Pris" value={editDraft.price} onChange={(e) => setEditDraft({ ...editDraft, price: e.target.value })} />
               <div style={{ display: "flex", alignItems: "center" }}>
                 <Stars value={editDraft.rating} onChange={(v) => setEditDraft({ ...editDraft, rating: v })} />
               </div>
-              <input ref={editFileRef} type="file" accept="image/*" onChange={(e) => {
-                const f = e.target.files?.[0]; if (!f) return;
-                const r = new FileReader();
-                r.onload = () => { setCropSrc(r.result); setCropFor("edit"); setCropOpen(true); setZoom(1); setCrop({ x: 0, y: 0 }); };
-                r.readAsDataURL(f);
-              }} style={{ ...input(), gridColumn: "1 / -1" }} />
+              <input
+                ref={editFileRef} type="file" accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]; if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => { setCropSrc(r.result); setCropFor("edit"); setCropOpen(true); setZoom(1); setCrop({ x: 0, y: 0 }); };
+                  r.readAsDataURL(f);
+                }}
+                style={{ ...input(), gridColumn: "1 / -1" }}
+              />
             </div>
             {editDraft.photoDataUrl && <img alt="preview" src={editDraft.photoDataUrl} style={{ marginTop: 12, width: "100%", maxHeight: 260, objectFit: "cover", borderRadius: 12, border: "1px solid #333" }} />}
             <div style={{ marginTop: 12, display: "flex", gap: 8, justifyContent: "flex-end" }}>

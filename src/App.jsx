@@ -1,12 +1,26 @@
 import React, { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Cropper from "react-easy-crop";
+import LoginBox from "./LoginBox.jsx";
+
 
 const SUPABASE_URL = "https://auiurmkojwpcbxarewdn.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK69y56R-KkvHzzcEfbwN2cmNqwtYwsHHA";
 const CLUB_ID = "floeng-olklub";
 
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const [session, setSession] = useState(null);
+
+useEffect(() => {
+  supabase.auth.getSession().then(({ data }) => {
+    setSession(data.session ?? null);
+  });
+  const { data: sub } = supabase.auth.onAuthStateChange((_e, sess) => {
+    setSession(sess);
+  });
+  return () => sub.subscription.unsubscribe();
+}, []);
+
 
 /* ---------- helpers ---------- */
 function uuid() { return crypto.randomUUID(); }
@@ -86,15 +100,13 @@ export default function App() {
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
     const { data: sub } = supabase.auth.onAuthStateChange((_e, s) => setUser(s?.user ?? null));
+if (!user) {
+  return <LoginBox onLoggedIn={() => window.location.reload()} />;
+}
+
     return () => sub?.subscription.unsubscribe();
   }, []);
-  async function signIn(email) {
-    const { error } = await supabase.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.href },
-    });
-    if (error) alert(error.message); else alert("Tjek din mail for login-link ✉️");
-  }
+
   async function signOut() { await supabase.auth.signOut(); }
 
   /* state */

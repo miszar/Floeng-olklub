@@ -143,8 +143,8 @@ export default function App() {
 
   // 👉 Gate hele appen bag OTP-login (LoginBox)
   if (!user) {
-    return <LoginBox onLoggedIn={() => window.location.reload()} />;
-  }
+  return <LoginBox />; // ingen reload, App lytter allerede på auth
+}
 
   async function signOut() {
     await supabase.auth.signOut();

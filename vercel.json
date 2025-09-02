@@ -1,7 +1,7 @@
 {
   "headers": [
-    { "source": "/",             "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
-    { "source": "/index.html",   "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
-    { "source": "/manifest.json","headers": [{ "key": "Cache-Control", "value": "no-store" }] }
+    { "source": "/",              "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
+    { "source": "/index.html",    "headers": [{ "key": "Cache-Control", "value": "no-store" }] },
+    { "source": "/manifest.json", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
   ]
 }

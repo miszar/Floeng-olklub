@@ -6,11 +6,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
     />
-    <!-- no-cache for sikkerheds skyld -->
+    <!-- no-cache -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-
     <title>Fløng Ølklub</title>
 
     <!-- Ikon & PWA -->
@@ -23,21 +22,39 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-    <!-- Canonical redirect + Cache Nuke (kører før app'en loader) -->
+    <!-- 0) Kill autofokus/scroll-restore & pin i toppen kortvarigt -->
     <script>
       (function () {
-        // 1) Lås til korrekt domæne (hvis man lander på en gammel preview-URL)
+        try {
+          if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+          // fjern evt. gemt fokus (som kan scrolle siden ned til input/select)
+          window.addEventListener("DOMContentLoaded", () => {
+            try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch {}
+          }, { once: true });
+          // hold siden i top ~1s (hvis noget forsøger at scrolle)
+          let t0 = Date.now();
+          const id = setInterval(() => {
+            window.scrollTo(0, 0);
+            if (Date.now() - t0 > 1200) clearInterval(id);
+          }, 50);
+        } catch (e) {}
+      })();
+    </script>
+
+    <!-- 1) Lås til canonical domæne -->
+    <script>
+      (function () {
         var CANON = "floeng-olklub.vercel.app";
         if (location.host !== CANON && /\.vercel\.app$/.test(location.host)) {
           location.replace(location.protocol + "//" + CANON + location.pathname + location.search + location.hash);
-          return;
         }
       })();
     </script>
+
+    <!-- 2) Nuke SW/caches når version ændres -->
     <script>
       (async function () {
-        // 2) Nuker SW, caches og storage når version ændres
-        const VERSION = "pwa-7"; // bump hvis du vil tvinge endnu et frisk load
+        const VERSION = "pwa-8";
         try {
           const prev = localStorage.getItem("APP_VERSION");
           if (prev !== VERSION) {
@@ -50,18 +67,16 @@
               await Promise.all(regs.map((r) => r.unregister()));
             }
             sessionStorage.clear();
-            // bevar ikke anden app-state – vi vil af med alt gammelt
             localStorage.clear();
             localStorage.setItem("APP_VERSION", VERSION);
+            window.scrollTo(0, 0);
           }
         } catch (e) {
-          // stille fejl – vi prøver bare igen næste gang
           console.warn("PWA nuke error:", e);
         }
       })();
     </script>
 
-    <!-- Globalt layout/gestures – gør PWA mere "app-agtig" og symmetrisk -->
     <style>
       html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
       html, body { overflow-x: hidden; overscroll-behavior: none; }
@@ -76,7 +91,6 @@
   </head>
   <body>
     <div id="root"></div>
-    <!-- Vite omskriver dette til hashed assets ved build -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

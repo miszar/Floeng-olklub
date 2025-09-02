@@ -22,8 +22,9 @@ function btn(variant = "primary") {
 function Stars({ value = 0, onChange }) {
   return (
     <div>
-      {[1, 2, 3, 4, 5].map((n) => (
-        <span key={n} onClick={() => onChange?.(n)} style={{ cursor: "pointer", color: n <= value ? "#ffd84d" : "#444", fontSize: 20 }}>★</span>
+      {[1,2,3,4,5].map((n) => (
+        <span key={n} onClick={() => onChange?.(n)}
+          style={{ cursor: "pointer", color: n <= value ? "#ffd84d" : "#444", fontSize: 20 }}>★</span>
       ))}
     </div>
   );
@@ -73,7 +74,7 @@ export default function App() {
     return () => sub?.subscription.unsubscribe();
   }, []);
 
-  // Gate appen bag OTP login
+  // Gate: vis kun LoginBox når man ikke er logget ind
   if (!user) return <LoginBox />;
 
   async function signOut() { await supabase.auth.signOut(); }
@@ -199,7 +200,7 @@ export default function App() {
   return (
     <div style={{ minHeight: "100vh", background: "#0f1115", color: "white" }}>
       <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        {/* Titel + logout */}
+        {/* Titel + kun Log ud (ingen EmailLogin nogen steder) */}
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <h1 style={{ fontSize: 40, fontWeight: 800, margin: 0 }}>Fløng Ølklub 🍻</h1>
           <button onClick={signOut} style={btn("ghost-sm")}>Log ud</button>
@@ -370,7 +371,7 @@ export default function App() {
                 image={cropSrc}
                 crop={crop}
                 zoom={zoom}
-                aspect={cropFor === "cover" ? COVER_ASPECT : PORTRAIT_ASPECT}
+                aspect={cropFor === "cover" ? (3) : (IMG_W / IMG_H)}
                 onCropChange={setCrop}
                 onZoomChange={setZoom}
                 onCropComplete={onCropComplete}

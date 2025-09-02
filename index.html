@@ -22,21 +22,31 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-    <!-- 0) Kill autofokus/scroll-restore & pin i toppen kortvarigt -->
+    <!-- 0) Anti-scroll / anti-autofocus / pin i top -->
     <script>
       (function () {
         try {
           if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-          // fjern evt. gemt fokus (som kan scrolle siden ned til input/select)
-          window.addEventListener("DOMContentLoaded", () => {
+
+          // Fjern evt. fokus (så select/input ikke scroller i view)
+          function blurActive() {
             try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch {}
-          }, { once: true });
-          // hold siden i top ~1s (hvis noget forsøger at scrolle)
-          let t0 = Date.now();
+          }
+          addEventListener("DOMContentLoaded", blurActive, { once: true });
+
+          // Hold siden i top 3s (så selv sene layout-shifts ikke hopper)
+          let tries = 0;
           const id = setInterval(() => {
             window.scrollTo(0, 0);
-            if (Date.now() - t0 > 1200) clearInterval(id);
+            blurActive();
+            if (++tries > 60) clearInterval(id); // 60 * 50ms = 3s
           }, 50);
+          // Og en ekstra sikkerhed når alt er loadet
+          addEventListener("load", () => { window.scrollTo(0, 0); blurActive(); }, { once: true });
+          // Når fanen bliver synlig igen
+          addEventListener("visibilitychange", () => {
+            if (document.visibilityState === "visible") { window.scrollTo(0, 0); blurActive(); }
+          });
         } catch (e) {}
       })();
     </script>
@@ -54,7 +64,7 @@
     <!-- 2) Nuke SW/caches når version ændres -->
     <script>
       (async function () {
-        const VERSION = "pwa-8";
+        const VERSION = "pwa-9";
         try {
           const prev = localStorage.getItem("APP_VERSION");
           if (prev !== VERSION) {
@@ -80,6 +90,8 @@
     <style>
       html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
       html, body { overflow-x: hidden; overscroll-behavior: none; }
+      /* Slå scroll anchoring fra – så Chrome ikke "holder" samme udsnit når ovenfor ændrer højde */
+      html, body { overflow-anchor: none; }
       body {
         touch-action: manipulation;
         padding-left: env(safe-area-inset-left);

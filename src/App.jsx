@@ -109,7 +109,18 @@ function AuthedApp({ user }) {
   const [cropPixels, setCropPixels] = useState(null);
   function onCropComplete(_a, p){ setCropPixels(p); }
 
+  // viewport (til mobil-responsiv justering)
+  const [vw, setVw] = useState(typeof window !== "undefined" ? window.innerWidth : 420);
+  useEffect(() => {
+    const onR = () => setVw(window.innerWidth);
+    window.addEventListener("resize", onR);
+    return () => window.removeEventListener("resize", onR);
+  }, []);
+  const isNarrow = vw < 390;
+
   const PORTRAIT_ASPECT = 140/220;
+  const IMG_W = isNarrow ? 120 : 140;
+  const IMG_H = Math.round(IMG_W / (140/220));
   const COVER_H = 180, COVER_ASPECT = 3;
 
   /* -------- robust loaders (retry + ingen alerts) -------- */
@@ -257,8 +268,7 @@ function AuthedApp({ user }) {
   }
 
   /* ---------------- UI ---------------- */
-  const IMG_W = 140, IMG_H = 220;
-
+  const gridMin = isNarrow ? 300 : 340; // smallere min-kort på mobil
   async function confirmCrop() {
     if (!cropPixels || !cropSrc) { setCropOpen(false); return; }
     const dataUrl = await getCroppedImg(cropSrc, cropPixels);
@@ -278,7 +288,7 @@ function AuthedApp({ user }) {
 
   return (
     <div style={{ minHeight:"100vh", background:"#0f1115", color:"white", overflowX:"hidden", touchAction:"manipulation" }}>
-      <div style={{ maxWidth:980, margin:"0 auto", padding:24 }}>
+      <div style={{ maxWidth:980, margin:"0 auto", padding: isNarrow ? "16px 12px" : "24px" }}>
         {/* Titel */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
           {/* venstre: titel + emoji */}
@@ -341,10 +351,10 @@ function AuthedApp({ user }) {
           {beers.length === 0 ? (
             <div style={{ opacity:.7 }}>Ingen øl endnu – brug “Tilføj Øl” 🍺</div>
           ) : (
-            <div style={{ display:"grid", gap:12, gridTemplateColumns:"repeat(auto-fill, minmax(360px, 1fr))" }}>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:`repeat(auto-fill, minmax(${gridMin}px, 1fr))` }}>
               {beers.map(b => (
                 <article key={b.id} style={card({ padding:0 })}>
-                  <div style={{ display:"flex", flexWrap:"wrap" }}>
+                  <div style={{ display:"flex", flexWrap:"nowrap" }}>
                     {/* venstre: billede */}
                     {photoUrls[b.id] ? (
                       <img src={photoUrls[b.id]} alt={b.name}
@@ -356,8 +366,8 @@ function AuthedApp({ user }) {
                     )}
 
                     {/* højre: tekst */}
-                    <div style={{ flex:1, minWidth:200, padding:12 }}>
-                      <div style={{ fontWeight:800, fontSize:22, marginBottom:2 }}>{b.name || "(uden navn)"}</div>
+                    <div style={{ flex:1, minWidth:0, padding:12 }}>
+                      <div style={{ fontWeight:800, fontSize:22, marginBottom:2, wordBreak:"break-word" }}>{b.name || "(uden navn)"}</div>
                       <div style={{ opacity:.9, fontSize:16 }}>
                         {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b> {b.color || "—"}
                       </div>

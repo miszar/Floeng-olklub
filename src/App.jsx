@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useEffect, useRef, useState } from "react";
 import Cropper from "react-easy-crop";
 import { supabase } from "./supabase";
@@ -6,7 +5,7 @@ import LoginBox from "./LoginBox.jsx";
 
 const CLUB_ID = "floeng-olklub";
 
-// ---------- ErrorBoundary ----------
+/* ---------------- ErrorBoundary ---------------- */
 class ErrorBoundary extends React.Component {
   constructor(p){ super(p); this.state = { hasError: false, err: null }; }
   static getDerivedStateFromError(error){ return { hasError: true, err: error }; }
@@ -24,7 +23,7 @@ class ErrorBoundary extends React.Component {
   }
 }
 
-// ---------- UI helpers ----------
+/* ---------------- UI helpers ---------------- */
 function card(extra = {}) {
   return { background: "#0b0d12", border: "1px solid #2a2e39", borderRadius: 14, padding: 12, ...extra };
 }
@@ -34,8 +33,8 @@ function input(extra = {}) {
 function btn(variant="primary") {
   const base = { borderRadius:999, cursor:"pointer", lineHeight:1 };
   if (variant === "primary") return { ...base, background:"#fff", color:"#000", border:"1px solid #fff", padding:"10px 14px", fontWeight:700 };
-  if (variant === "ghost-sm") return { ...base, background:"transparent", color:"#cfd3dc", border:"1px solid #2a2e39", padding:"6px 10px", fontSize:13 };
-  if (variant === "danger-sm") return { ...base, background:"transparent", color:"#ff7a7a", border:"1px solid #3a2a2a", padding:"6px 10px", fontSize:13 };
+  if (variant === "ghost-sm")   return { ...base, background:"transparent", color:"#cfd3dc", border:"1px solid #2a2e39", padding:"6px 10px", fontSize:13 };
+  if (variant === "danger-sm")  return { ...base, background:"transparent", color:"#ff7a7a", border:"1px solid #3a2a2a", padding:"6px 10px", fontSize:13 };
   return base;
 }
 function Stars({ value = 0, onChange }) {
@@ -49,7 +48,7 @@ function Stars({ value = 0, onChange }) {
   );
 }
 
-// ---------- misc helpers ----------
+/* ---------------- misc helpers ---------------- */
 function uuid() {
   if (crypto?.randomUUID) return crypto.randomUUID();
   const r = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
@@ -63,7 +62,8 @@ function dataURLtoFile(dataUrl, filename) {
 }
 async function getSignedUrl(path, ttlHours = 24 * 7) {
   if (!path) return null;
-  const { data } = await supabase.storage.from("photos").createSignedUrl(path, 60 * 60 * ttlHours);
+  const { data, error } = await supabase.storage.from("photos").createSignedUrl(path, 60 * 60 * ttlHours);
+  if (error) throw error;
   return data?.signedUrl ?? null;
 }
 async function getCroppedImg(imageSrc, cropPixels) {
@@ -78,8 +78,9 @@ async function getCroppedImg(imageSrc, cropPixels) {
   ctx.drawImage(image, sx, sy, w, h, 0, 0, w, h);
   return canvas.toDataURL("image/jpeg", 0.92);
 }
+const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
-// ---------- AuthedApp: ALLE øvrige hooks herinde ----------
+/* ---------------- AuthedApp (alt UI) ---------------- */
 function AuthedApp({ user }) {
   async function signOut(){ await supabase.auth.signOut(); }
 
@@ -102,15 +103,166 @@ function AuthedApp({ user }) {
   // cropper
   const [cropOpen, setCropOpen] = useState(false);
   const [cropSrc, setCropSrc] = useState("");
-  const [cropFor, setCropFor] = useState("create");
+  const [cropFor, setCropFor] = useState("create"); // "create" | "edit" | "cover"
   const [crop, setCrop] = useState({ x:0, y:0 });
   const [zoom, setZoom] = useState(1);
   const [cropPixels, setCropPixels] = useState(null);
   function onCropComplete(_a, p){ setCropPixels(p); }
 
+  const PORTRAIT_ASPECT = 140/220;
+  const COVER_H = 180, COVER_ASPECT = 3;
+
+  /* -------- robust loaders (retry + ingen alerts) -------- */
+  useEffect(() => { loadBeers(); }, [user, sortBy, sortDir, search]);
+  useEffect(() => { loadCover(); }, [user]);
+
+  async function loadBeers() {
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        let q = supabase
+          .from("beers")
+          .select("id, name, brewery, style, color, price, rating, photo_path, created_at")
+          .eq("club_id", CLUB_ID);
+
+        if (search) q = q.or(`name.ilike.%${search}%,brewery.ilike.%${search}%,style.ilike.%${search}%,color.ilike.%${search}%`);
+
+        const { data, error } = await q.order(sortBy, { ascending: sortDir === "asc" });
+        if (error) throw error;
+
+        setBeers(data || []);
+        const entries = await Promise.all(
+          (data || []).map(async (b) => [b.id, b.photo_path ? await getSignedUrl(b.photo_path) : null])
+        );
+        setPhotoUrls(Object.fromEntries(entries));
+        return;
+      } catch (err) {
+        console.warn(`loadBeers failed (attempt ${attempt}):`, err?.message || err);
+        if (attempt < 3) await sleep(600 * attempt);
+      }
+    }
+    setBeers([]);
+  }
+
+  async function loadCover() {
+    const path = `covers/${CLUB_ID}.jpg`;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        setCoverUrl(await getSignedUrl(path));
+        return;
+      } catch (err) {
+        console.warn(`loadCover failed (attempt ${attempt}):`, err?.message || err);
+        if (attempt < 3) await sleep(600 * attempt);
+      }
+    }
+    setCoverUrl(null);
+  }
+
+  /* -------- helpers til at gøre data ren før DB -------- */
+  function cleanDraft(d) {
+    const toNull = (v) => (v != null && String(v).trim() !== "" ? String(v).trim() : null);
+    const toNum  = (v) => (v === "" || v == null ? null : Number(v));
+    return {
+      name: String(d.name || "").trim(),
+      brewery: toNull(d.brewery),
+      style: toNull(d.style),
+      color: toNull(d.color),
+      price: toNum(d.price),                 // pris gemmes som tal eller null
+      rating: typeof d.rating === "number" ? d.rating : Number(d.rating) || 0, // stjerner → tal
+    };
+  }
+
+  /* ---------------- CRUD ---------------- */
+  async function addBeer() {
+    const cleaned = cleanDraft(draft);
+    if (!cleaned.name) return alert("Giv øllen et navn");
+
+    let photo_path = null;
+    try {
+      if (draft.photoDataUrl) {
+        const file = dataURLtoFile(draft.photoDataUrl, `${uuid()}.jpg`);
+        photo_path = `${CLUB_ID}/${file.name}`;
+        const { error: upErr } = await supabase.storage.from("photos").upload(photo_path, file, { contentType:"image/jpeg" });
+        if (upErr) throw upErr;
+      }
+
+      const { error } = await supabase
+        .from("beers")
+        .insert({
+          club_id: CLUB_ID,
+          name: cleaned.name,
+          brewery: cleaned.brewery,
+          style: cleaned.style,
+          color: cleaned.color,
+          price: cleaned.price,
+          rating: cleaned.rating,
+          photo_path
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setDraft({ name:"", brewery:"", style:"", color:"", price:"", rating:0, photoDataUrl:"" });
+      setAddOpen(false);
+      await loadBeers();
+    } catch (e) {
+      alert("Kunne ikke gemme (INSERT): " + (e?.message || e?.details || JSON.stringify(e)));
+    }
+  }
+
+  async function updateBeer() {
+    if (!editing) return;
+    const cleaned = cleanDraft(editDraft || {});
+
+    try {
+      let photo_path = editing.photo_path;
+      if (editDraft?.photoDataUrl) {
+        if (photo_path) { try { await supabase.storage.from("photos").remove([photo_path]); } catch {} }
+        const file = dataURLtoFile(editDraft.photoDataUrl, `${uuid()}.jpg`);
+        photo_path = `${CLUB_ID}/${file.name}`;
+        const { error: upErr } = await supabase.storage.from("photos").upload(photo_path, file, { contentType:"image/jpeg" });
+        if (upErr) throw upErr;
+      }
+
+      const { error } = await supabase
+        .from("beers")
+        .update({
+          name: cleaned.name,
+          brewery: cleaned.brewery,
+          style: cleaned.style,
+          color: cleaned.color,
+          price: cleaned.price,
+          rating: cleaned.rating,
+          photo_path
+        })
+        .eq("id", editing.id)
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setEditing(null); setEditDraft(null);
+      await loadBeers();
+    } catch (e) {
+      alert("Kunne ikke gemme (UPDATE): " + (e?.message || e?.details || JSON.stringify(e)));
+    }
+  }
+
+  async function deleteBeer(b) {
+    const sure = window.confirm(`Slet "${b.name}"?`); if (!sure) return;
+    const { error } = await supabase.from("beers").delete().eq("id", b.id);
+    if (error) { alert(error.message); return; }
+    if (b.photo_path) { try { await supabase.storage.from("photos").remove([b.photo_path]); } catch {} }
+    await loadBeers();
+  }
+
+  /* ---------------- UI ---------------- */
+  const IMG_W = 140, IMG_H = 220;
+
   async function confirmCrop() {
     if (!cropPixels || !cropSrc) { setCropOpen(false); return; }
     const dataUrl = await getCroppedImg(cropSrc, cropPixels);
+
     if (cropFor === "create") setDraft(d => ({ ...d, photoDataUrl: dataUrl }));
     if (cropFor === "edit")   setEditDraft(d => ({ ...d, photoDataUrl: dataUrl }));
     if (cropFor === "cover") {
@@ -124,82 +276,13 @@ function AuthedApp({ user }) {
     setCropOpen(false);
   }
 
-  useEffect(() => { loadBeers(); }, [user, sortBy, sortDir, search]);
-  useEffect(() => { loadCover(); }, [user]);
-
-  async function loadBeers() {
-    let q = supabase.from("beers")
-      .select("id, name, brewery, style, color, price, rating, photo_path, created_at")
-      .eq("club_id", CLUB_ID);
-    if (search) q = q.or(`name.ilike.%${search}%,brewery.ilike.%${search}%,style.ilike.%${search}%,color.ilike.%${search}%`);
-    const { data, error } = await q.order(sortBy, { ascending: sortDir === "asc" });
-    if (error) { alert(error.message); return; }
-    setBeers(data || []);
-    const entries = await Promise.all((data || []).map(async (b) => [b.id, await getSignedUrl(b.photo_path)]));
-    setPhotoUrls(Object.fromEntries(entries));
-  }
-  async function loadCover() {
-    const path = `covers/${CLUB_ID}.jpg`;
-    setCoverUrl(await getSignedUrl(path));
-  }
-
-  async function addBeer() {
-    if (!draft.name.trim()) return alert("Giv øllen et navn");
-    let photo_path = null;
-    if (draft.photoDataUrl) {
-      const file = dataURLtoFile(draft.photoDataUrl, `${uuid()}.jpg`);
-      photo_path = `${CLUB_ID}/${file.name}`;
-      const { error: upErr } = await supabase.storage.from("photos").upload(photo_path, file, { contentType:"image/jpeg" });
-      if (upErr) { alert("Upload fejlede: " + upErr.message); return; }
-    }
-    const { error } = await supabase.from("beers").insert({
-      club_id: CLUB_ID, name: draft.name, brewery: draft.brewery || null,
-      style: draft.style || null, color: draft.color || null, price: draft.price || null,
-      rating: draft.rating || 0, photo_path
-    });
-    if (error) { alert(error.message); return; }
-    setDraft({ name:"", brewery:"", style:"", color:"", price:"", rating:0, photoDataUrl:"" });
-    setAddOpen(false);
-    await loadBeers();
-  }
-
-  async function updateBeer() {
-    if (!editing) return;
-    let photo_path = editing.photo_path;
-    if (editDraft?.photoDataUrl) {
-      if (photo_path) { try { await supabase.storage.from("photos").remove([photo_path]); } catch {} }
-      const file = dataURLtoFile(editDraft.photoDataUrl, `${uuid()}.jpg`);
-      photo_path = `${CLUB_ID}/${file.name}`;
-      const { error: upErr } = await supabase.storage.from("photos").upload(photo_path, file, { contentType:"image/jpeg" });
-      if (upErr) { alert("Upload fejlede: " + upErr.message); return; }
-    }
-    const { error } = await supabase.from("beers").update({
-      name: editDraft.name, brewery: editDraft.brewery || null, style: editDraft.style || null,
-      color: editDraft.color || null, price: editDraft.price || null, rating: editDraft.rating ?? 0, photo_path
-    }).eq("id", editing.id);
-    if (error) { alert(error.message); return; }
-    setEditing(null); setEditDraft(null);
-    await loadBeers();
-  }
-
-  async function deleteBeer(b) {
-    const sure = window.confirm(`Slet "${b.name}"?`); if (!sure) return;
-    const { error } = await supabase.from("beers").delete().eq("id", b.id);
-    if (error) { alert(error.message); return; }
-    if (b.photo_path) { try { await supabase.storage.from("photos").remove([b.photo_path]); } catch {} }
-    await loadBeers();
-  }
-
-  const IMG_W = 140, IMG_H = 220;
-  const COVER_H = 180;
-
   return (
     <div style={{ minHeight:"100vh", background:"#0f1115", color:"white" }}>
       <div style={{ maxWidth:980, margin:"0 auto", padding:24 }}>
         {/* Titel */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
           <h1 style={{ fontSize:40, fontWeight:800, margin:0 }}>
-            Fløng Ølklub 🍻 <span style={{opacity:.5,fontSize:16}}>v10</span>
+            Fløng Ølklub 🍻 <span style={{opacity:.5,fontSize:16}}>v11</span>
           </h1>
           <button onClick={signOut} style={btn("ghost-sm")}>Log ud</button>
         </div>
@@ -216,13 +299,15 @@ function AuthedApp({ user }) {
           {!coverUrl && "(intet cover)"}
         </div>
         <div style={{ marginTop:6, display:"flex", justifyContent:"flex-end" }}>
-          <input ref={coverFileRef} type="file" accept="image/*" style={{ display:"none" }}
-                 onChange={e => {
-                   const f = e.target.files?.[0]; if (!f) return;
-                   const r = new FileReader();
-                   r.onload = () => { setCropSrc(r.result); setCropFor("cover"); setCropOpen(true); setZoom(1); setCrop({ x:0, y:0 }); };
-                   r.readAsDataURL(f);
-                 }} />
+          <input
+            ref={coverFileRef} type="file" accept="image/*" style={{ display:"none" }}
+            onChange={(e) => {
+              const f = e.target.files?.[0]; if (!f) return;
+              const r = new FileReader();
+              r.onload = () => { setCropSrc(r.result); setCropFor("cover"); setCropOpen(true); setZoom(1); setCrop({ x:0, y:0 }); };
+              r.readAsDataURL(f);
+            }}
+          />
           <button onClick={() => coverFileRef.current?.click()} style={btn("ghost-sm")}>Skift cover</button>
         </div>
 
@@ -257,6 +342,7 @@ function AuthedApp({ user }) {
               {beers.map(b => (
                 <article key={b.id} style={card({ padding:0 })}>
                   <div style={{ display:"flex", flexWrap:"wrap" }}>
+                    {/* venstre: billede */}
                     {photoUrls[b.id] ? (
                       <img src={photoUrls[b.id]} alt={b.name}
                            style={{ width:IMG_W, height:IMG_H, objectFit:"cover", borderTopLeftRadius:14, borderBottomLeftRadius:14 }} />
@@ -265,15 +351,33 @@ function AuthedApp({ user }) {
                         (intet billede)
                       </div>
                     )}
+
+                    {/* højre: tekst */}
                     <div style={{ flex:1, minWidth:200, padding:12 }}>
                       <div style={{ fontWeight:800, fontSize:22, marginBottom:2 }}>{b.name || "(uden navn)"}</div>
                       <div style={{ opacity:.9, fontSize:16 }}>
                         {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b> {b.color || "—"}
                       </div>
-                      <div style={{ opacity:.85, marginTop:6, fontSize:16 }}>Pris: {b.price || "—"}</div>
+                      <div style={{ opacity:.85, marginTop:6, fontSize:16 }}>Pris: {b.price ?? "—"}</div>
                       <div style={{ marginTop:8 }}><Stars value={b.rating ?? 0} onChange={() => {}} /></div>
                       <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
-                        <button onClick={() => { setEditing(b); setEditDraft({ name:b.name||"", brewery:b.brewery||"", style:b.style||"", color:b.color||"", price:b.price||"", rating:b.rating||0, photoDataUrl:"" }); }} style={btn("ghost-sm")}>Redigér</button>
+                        <button
+                          onClick={() => {
+                            setEditing(b);
+                            setEditDraft({
+                              name: b.name || "",
+                              brewery: b.brewery || "",
+                              style: b.style || "",
+                              color: b.color || "",
+                              price: b.price ?? "",
+                              rating: typeof b.rating === "number" ? b.rating : Number(b.rating) || 0,
+                              photoDataUrl: ""
+                            });
+                          }}
+                          style={btn("ghost-sm")}
+                        >
+                          Redigér
+                        </button>
                         <button onClick={() => deleteBeer(b)} style={btn("danger-sm")}>Slet</button>
                       </div>
                     </div>
@@ -285,7 +389,75 @@ function AuthedApp({ user }) {
         </section>
       </div>
 
-      {/* ADD / EDIT modaler + cropper kan blive som du har dem; udeladt her for plads */}
+      {/* ---------------- ADD MODAL ---------------- */}
+      {addOpen && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"grid", placeItems:"center", zIndex:50 }}>
+          <div style={{ background:"#0b0d12", padding:16, borderRadius:12, border:"1px solid #2a2e39", width:"min(720px, 92vw)" }}>
+            <h3 style={{ marginTop:0 }}>Tilføj Øl</h3>
+            <div style={{ display:"grid", gap:8, gridTemplateColumns:"repeat(2, 1fr)" }}>
+              <input style={input()} placeholder="Navn*" value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} />
+              <input style={input()} placeholder="Bryggeri" value={draft.brewery} onChange={e => setDraft({ ...draft, brewery: e.target.value })} />
+              <input style={input()} placeholder="Stil" value={draft.style} onChange={e => setDraft({ ...draft, style: e.target.value })} />
+              <input style={input()} placeholder="Farve (fx Gylden / Amber / Mørk)" value={draft.color} onChange={e => setDraft({ ...draft, color: e.target.value })} />
+              <input style={input()} placeholder="Pris (tal)" value={draft.price} onChange={e => setDraft({ ...draft, price: e.target.value })} />
+              <div style={{ display:"flex", alignItems:"center" }}>
+                <Stars value={draft.rating} onChange={(v) => setDraft({ ...draft, rating: v })} />
+              </div>
+              <input
+                ref={addFileRef} type="file" accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]; if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => { setCropSrc(r.result); setCropFor("create"); setCropOpen(true); setZoom(1); setCrop({ x:0, y:0 }); };
+                  r.readAsDataURL(f);
+                }}
+                style={{ ...input(), gridColumn:"1 / -1" }}
+              />
+            </div>
+            {draft.photoDataUrl && <img alt="preview" src={draft.photoDataUrl} style={{ marginTop:12, width:"100%", maxHeight:260, objectFit:"cover", borderRadius:12, border:"1px solid #333" }} />}
+            <div style={{ marginTop:12, display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <button onClick={() => setAddOpen(false)} style={btn("ghost-sm")}>Annuller</button>
+              <button onClick={addBeer} style={btn("primary")}>Gem</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- EDIT MODAL ---------------- */}
+      {editing && editDraft && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.6)", display:"grid", placeItems:"center", zIndex:50 }}>
+          <div style={{ background:"#0b0d12", padding:16, borderRadius:12, border:"1px solid #2a2e39", width:"min(720px, 92vw)" }}>
+            <h3 style={{ marginTop:0 }}>Redigér: {editing.name}</h3>
+            <div style={{ display:"grid", gap:8, gridTemplateColumns:"repeat(2, 1fr)" }}>
+              <input style={input()} placeholder="Navn" value={editDraft.name} onChange={e => setEditDraft({ ...editDraft, name: e.target.value })} />
+              <input style={input()} placeholder="Bryggeri" value={editDraft.brewery} onChange={e => setEditDraft({ ...editDraft, brewery: e.target.value })} />
+              <input style={input()} placeholder="Stil" value={editDraft.style} onChange={e => setEditDraft({ ...editDraft, style: e.target.value })} />
+              <input style={input()} placeholder="Farve" value={editDraft.color} onChange={e => setEditDraft({ ...editDraft, color: e.target.value })} />
+              <input style={input()} placeholder="Pris (tal)" value={editDraft.price ?? ""} onChange={e => setEditDraft({ ...editDraft, price: e.target.value })} />
+              <div style={{ display:"flex", alignItems:"center" }}>
+                <Stars value={editDraft.rating} onChange={(v) => setEditDraft({ ...editDraft, rating: v })} />
+              </div>
+              <input
+                ref={editFileRef} type="file" accept="image/*"
+                onChange={(e) => {
+                  const f = e.target.files?.[0]; if (!f) return;
+                  const r = new FileReader();
+                  r.onload = () => { setCropSrc(r.result); setCropFor("edit"); setCropOpen(true); setZoom(1); setCrop({ x:0, y:0 }); };
+                  r.readAsDataURL(f);
+                }}
+                style={{ ...input(), gridColumn:"1 / -1" }}
+              />
+            </div>
+            {editDraft.photoDataUrl && <img alt="preview" src={editDraft.photoDataUrl} style={{ marginTop:12, width:"100%", maxHeight:260, objectFit:"cover", borderRadius:12, border:"1px solid #333" }} />}
+            <div style={{ marginTop:12, display:"flex", gap:8, justifyContent:"flex-end" }}>
+              <button onClick={() => { setEditing(null); setEditDraft(null); }} style={btn("ghost-sm")}>Annuller</button>
+              <button onClick={updateBeer} style={btn("primary")}>Gem</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ---------------- Cropper modal ---------------- */}
       {cropOpen && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,.75)", display:"grid", placeItems:"center", zIndex:60 }}>
           <div style={{ width:"min(720px, 92vw)", background:"#0b0d12", border:"1px solid #2a2e39", borderRadius:14, padding:16 }}>
@@ -294,7 +466,7 @@ function AuthedApp({ user }) {
               <Cropper
                 image={cropSrc}
                 crop={crop} zoom={zoom}
-                aspect={140/220}
+                aspect={cropFor === "cover" ? COVER_ASPECT : PORTRAIT_ASPECT}
                 onCropChange={setCrop} onZoomChange={setZoom} onCropComplete={onCropComplete}
                 restrictPosition
               />
@@ -312,7 +484,7 @@ function AuthedApp({ user }) {
   );
 }
 
-// ---------- AuthGate: KUN auth-hooks & valg af skærm ----------
+/* ---------------- AuthGate (kun auth-hooks) ---------------- */
 function AuthGate(){
   const [user, setUser] = useState(null);
   const [ready, setReady] = useState(false);
@@ -336,7 +508,7 @@ function AuthGate(){
   return <AuthedApp user={user} />;
 }
 
-// ---------- App root ----------
+/* ---------------- App root ---------------- */
 export default function App(){
   return (
     <ErrorBoundary>

@@ -216,9 +216,20 @@ function AuthedApp({ user }){
     setCropOpen(false);
   }
 
+  // beregn base padding og giv ekstra top for iPhone notch
+  const basePadY = vw < 390 ? 16 : 24;
+  const basePadX = vw < 390 ? 12 : 24;
+
   return (
     <div style={{ minHeight:"100vh", background:"#0f1115", color:"white", overflowX:"hidden", touchAction:"manipulation" }}>
-      <div style={{ maxWidth:980, margin:"0 auto", padding: (vw<390)?"16px 12px":"24px" }}>
+      <div
+        style={{
+          maxWidth:980,
+          margin:"0 auto",
+          padding: `${basePadY}px ${basePadX}px`,
+          paddingTop: `calc(${basePadY}px + env(safe-area-inset-top, 0px))`,
+        }}
+      >
         {/* Titel */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
@@ -279,7 +290,7 @@ function AuthedApp({ user }){
           {beers.length===0 ? (
             <div style={{ opacity:.7 }}>Ingen øl endnu – brug “Tilføj Øl” 🍺</div>
           ) : (
-            <div style={{ display:"grid", gap:12, gridTemplateColumns:`repeat(auto-fill, minmax(${gridMin}px, 1fr))` }}>
+            <div style={{ display:"grid", gap:12, gridTemplateColumns:`repeat(auto-fill, minmax(${(vw<390)?300:340}px, 1fr))` }}>
               {beers.map(b=>(
                 <article key={b.id} style={card({ padding:0 })}>
                   <div style={{ display:"flex", flexWrap:"nowrap" }}>
@@ -296,10 +307,15 @@ function AuthedApp({ user }){
                     )}
                     <div style={{ flex:1, minWidth:0, padding:12 }}>
                       <div style={{ fontWeight:800, fontSize:22, marginBottom:2, wordBreak:"break-word" }}>{b.name || "(uden navn)"}</div>
+
+                      {/* Kun værdier – ingen labels */}
                       <div style={{ opacity:.9, fontSize:16 }}>
-                        {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b> {b.color || "—"}
+                        {b.brewery || "—"} • {b.style || "—"} • {b.color || "—"}
                       </div>
-                      <div style={{ opacity:.85, marginTop:6, fontSize:16 }}>Pris: {b.price ?? "—"}</div>
+                      <div style={{ opacity:.85, marginTop:6, fontSize:16 }}>
+                        {b.price ?? "—"}
+                      </div>
+
                       <div style={{ marginTop:8 }}><Stars value={b.rating ?? 0} onChange={()=>{}} /></div>
                       <div style={{ marginTop:8, display:"flex", gap:8, flexWrap:"wrap" }}>
                         <button

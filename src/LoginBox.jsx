@@ -2,13 +2,13 @@ import React, { useState } from "react";
 import { supabase } from "./supabase";
 
 export default function LoginBox() {
-  const [step, setStep] = useState("request"); // request | verify
+  const [step, setStep] = useState("request"); // "request" | "verify"
   const [email, setEmail] = useState("");
   const [code, setCode] = useState("");
   const [msg, setMsg] = useState("");
   const [busy, setBusy] = useState(false);
 
-  const sendOtp = async () => {
+  async function sendOtp() {
     if (!email) return;
     setBusy(true); setMsg("");
     try {
@@ -24,9 +24,9 @@ export default function LoginBox() {
     } finally {
       setBusy(false);
     }
-  };
+  }
 
-  const verifyOtp = async () => {
+  async function verifyOtp() {
     if (!email || code.length < 6) return;
     setBusy(true); setMsg("");
     try {
@@ -36,17 +36,17 @@ export default function LoginBox() {
         type: "email",
       });
       if (error) throw error;
-      setMsg("Logget ind ✅"); // App.jsx lytter på auth og skifter UI
+      setMsg("Logget ind ✅"); // App.jsx lytter og skifter UI selv
     } catch (e) {
       setMsg(e.message || "Forkert kode?");
     } finally {
       setBusy(false);
     }
-  };
+  }
 
-  const box = { maxWidth: 420, margin: "40px auto", background: "#111", padding: 20, borderRadius: 16, border: "1px solid #2a2e39", color: "#fff" };
+  const box   = { maxWidth: 420, margin: "40px auto", background: "#111", padding: 20, borderRadius: 16, border: "1px solid #2a2e39", color: "#fff" };
   const input = { width: "100%", padding: 12, borderRadius: 10, border: "1px solid #333", background: "#0b0d12", color: "#fff" };
-  const btn = { width: "100%", padding: 12, borderRadius: 10 };
+  const btn   = { width: "100%", padding: 12, borderRadius: 10, cursor: "pointer" };
 
   return (
     <div style={box}>
@@ -74,7 +74,7 @@ export default function LoginBox() {
         </>
       )}
 
-      {msg && <div style={{ marginTop: 12, fontSize: 13, opacity: 0.9 }}>{msg}</div>}
+      {msg && <div style={{ marginTop: 12, fontSize: 13, opacity: .9 }}>{msg}</div>}
     </div>
   );
 }

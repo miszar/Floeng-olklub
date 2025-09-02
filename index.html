@@ -17,33 +17,25 @@
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0f1115" />
 
-    <!-- iOS PWA -->
+    <!-- PWA-capable (Chrome + iOS) -->
+    <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/icon-192.png" />
 
-    <!-- 0) Anti-scroll / anti-autofocus / pin i top -->
-    <script>
-      (function () {
-        try {
-          if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-          function blurActive(){ try{ document.activeElement && document.activeElement.blur && document.activeElement.blur(); }catch{} }
-          addEventListener("DOMContentLoaded", blurActive, { once:true });
-          let tries = 0;
-          const id = setInterval(() => {
-            window.scrollTo(0, 0);
-            blurActive();
-            if (++tries > 60) clearInterval(id); // ~3s
-          }, 50);
-          addEventListener("load", () => { window.scrollTo(0, 0); blurActive(); }, { once:true });
-          addEventListener("visibilitychange", () => {
-            if (document.visibilityState === "visible") { window.scrollTo(0, 0); blurActive(); }
-          });
-        } catch (e) {}
-      })();
-    </script>
+    <!-- 0) Anti-scroll + preload lock -->
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
+      html, body { overflow-x: hidden; overscroll-behavior: none; overflow-anchor: none; }
+      body { touch-action: manipulation; padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+      #root { min-height: 100%; }
+      img { max-width: 100%; height: auto; }
 
-    <!-- 1) Lås til canonical domæne -->
+      /* Lås body så den ikke kan scrolle før vi er klar */
+      .preload-lock { position: fixed; inset: 0; overflow: hidden; width: 100%; }
+    </style>
+
+    <!-- 1) Lås til kanonisk domæne -->
     <script>
       (function () {
         var CANON = "floeng-olklub.vercel.app";
@@ -56,7 +48,7 @@
     <!-- 2) Nuke SW/caches når version ændres -->
     <script>
       (async function () {
-        const VERSION = "pwa-10";
+        const VERSION = "pwa-11";
         try {
           const prev = localStorage.getItem("APP_VERSION");
           if (prev !== VERSION) {
@@ -71,27 +63,41 @@
             sessionStorage.clear();
             localStorage.clear();
             localStorage.setItem("APP_VERSION", VERSION);
-            window.scrollTo(0, 0);
           }
-        } catch (e) {
-          console.warn("PWA nuke error:", e);
-        }
+        } catch (e) { console.warn("PWA nuke error:", e); }
       })();
     </script>
 
-    <style>
-      html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
-      html, body { overflow-x: hidden; overscroll-behavior: none; overflow-anchor: none; }
-      body {
-        touch-action: manipulation;
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
-      }
-      #root { min-height: 100%; }
-      img { max-width: 100%; height: auto; }
-    </style>
+    <!-- 3) Hold siden i top indtil efter load -->
+    <script>
+      (function () {
+        try {
+          if ("scrollRestoration" in history) history.scrollRestoration = "manual";
+          function toTop() {
+            try {
+              window.scrollTo(0, 0);
+              document.documentElement.scrollTop = 0;
+              document.body.scrollTop = 0;
+              document.activeElement && document.activeElement.blur && document.activeElement.blur();
+            } catch {}
+          }
+          // For bfcache/tilbage-knap
+          addEventListener("pageshow", () => { toTop(); }, { passive: true });
+
+          // Efter load: fjern lås og bliv på top (flere gange hvis browser vil drille)
+          addEventListener("load", () => {
+            toTop();
+            document.body.classList.remove("preload-lock");
+            setTimeout(toTop, 0);
+            setTimeout(toTop, 50);
+            setTimeout(toTop, 150);
+            setTimeout(toTop, 350);
+          }, { once: true });
+        } catch {}
+      })();
+    </script>
   </head>
-  <body>
+  <body class="preload-lock">
     <div id="root"></div>
     <script type="module" src="/src/main.jsx"></script>
   </body>

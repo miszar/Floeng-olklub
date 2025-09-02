@@ -1,4 +1,3 @@
-// src/App.jsx
 import React, { useEffect, useRef, useState } from "react";
 import { createClient } from "@supabase/supabase-js";
 import Cropper from "react-easy-crop";
@@ -9,12 +8,61 @@ const SUPABASE_URL = "https://auiurmkojwpcbxarewdn.supabase.co";
 const SUPABASE_ANON_KEY =
   "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImF1aXVybWtvandwY2J4YXJld2RuIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTY2ODE2NzMsImV4cCI6MjA3MjI1NzY3M30.09Hv3K3OADK69y56R-KkvHzzcEfbwN2cmNqwtYwsHHA";
 const CLUB_ID = "floeng-olklub";
-
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+// ===== simple ErrorBoundary (viser fejl på skærmen) =====
+function ErrorBoundary({ children }) {
+  const [err, setErr] = useState(null);
+  useEffect(() => {
+    const onErr = (e) => setErr(e.error || e.message || "Ukendt fejl");
+    window.addEventListener("error", onErr);
+    window.addEventListener("unhandledrejection", (e) =>
+      setErr(e.reason?.message || String(e.reason))
+    );
+    return () => {
+      window.removeEventListener("error", onErr);
+      window.removeEventListener("unhandledrejection", onErr);
+    };
+  }, []);
+  if (err) {
+    return (
+      <div
+        style={{
+          padding: 16,
+          fontFamily: "ui-sans-serif, system-ui",
+          color: "#fff",
+          background: "#1b1d24",
+          minHeight: "100vh",
+        }}
+      >
+        <h2 style={{ marginTop: 0 }}>Der opstod en fejl</h2>
+        <pre
+          style={{
+            whiteSpace: "pre-wrap",
+            background: "#111",
+            border: "1px solid #333",
+            padding: 12,
+            borderRadius: 8,
+          }}
+        >
+          {String(err)}
+        </pre>
+        <div style={{ marginTop: 8, opacity: 0.85 }}>
+          (Genindlæs siden efter du har rettet, eller slet app-ikonet og føj til
+          hjemmeskærm igen for at rydde PWA-cache.)
+        </div>
+      </div>
+    );
+  }
+  return children;
+}
 
 // ===== helpers =====
 function uuid() {
-  return crypto.randomUUID();
+  // iOS <16 kan mangle randomUUID – fallback
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  const rnd = () => Math.floor((1 + Math.random()) * 0x10000).toString(16).slice(1);
+  return `${rnd()}-${rnd()}-${rnd()}-${rnd()}-${rnd()}${rnd()}${rnd()}`;
 }
 function dataURLtoFile(dataUrl, filename) {
   const arr = dataUrl.split(","),
@@ -56,7 +104,7 @@ async function getCroppedImg(imageSrc, cropPixels) {
 function card(extra = {}) {
   return {
     background: "#0b0d12",
-    border: "1px solid #2a2e39",
+    border: "1px solid "#2a2e39",
     borderRadius: 14,
     padding: 12,
     ...extra,
@@ -130,7 +178,7 @@ function Stars({ value = 0, onChange }) {
 export default function App() {
   const [user, setUser] = useState(null);
 
-  // auth
+  // auth: én listener
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
       setUser(data.session?.user ?? null);
@@ -141,10 +189,14 @@ export default function App() {
     return () => sub?.subscription.unsubscribe();
   }, []);
 
-  // 👉 Gate hele appen bag OTP-login (LoginBox)
+  // Vis login-boks indtil der er en session
   if (!user) {
-  return <LoginBox />; // ingen reload, App lytter allerede på auth
-}
+    return (
+      <ErrorBoundary>
+        <LoginBox />
+      </ErrorBoundary>
+    );
+  }
 
   async function signOut() {
     await supabase.auth.signOut();
@@ -306,7 +358,7 @@ export default function App() {
     if (!editing) return;
 
     let photo_path = editing.photo_path;
-    if (editDraft.photoDataUrl) {
+    if (editDraft?.photoDataUrl) {
       if (photo_path) {
         try {
           await supabase.storage.from("photos").remove([photo_path]);
@@ -369,562 +421,564 @@ export default function App() {
     COVER_ASPECT = 3;
 
   return (
-    <div style={{ minHeight: "100vh", background: "#0f1115", color: "white" }}>
-      <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
-        {/* Titel + logout */}
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <h1 style={{ fontSize: 40, fontWeight: 800, margin: 0 }}>
-            Fløng Ølklub 🍻
-          </h1>
-          <button onClick={signOut} style={btn("ghost-sm")}>
-            Log ud
-          </button>
-        </div>
-
-        {/* Cover */}
-        <div
-          style={{
-            marginTop: 8,
-            width: "100%",
-            height: COVER_H,
-            borderRadius: 12,
-            border: "1px solid #2a2e39",
-            overflow: "hidden",
-            background: coverUrl
-              ? `center / cover no-repeat url(${coverUrl})`
-              : "#161922",
-            display: "grid",
-            placeItems: coverUrl ? "unset" : "center",
-            color: "#8b8f9a",
-          }}
-        >
-          {!coverUrl && "(intet cover)"}
-        </div>
-        <div
-          style={{
-            marginTop: 6,
-            display: "flex",
-            justifyContent: "flex-end",
-          }}
-        >
-          <input
-            ref={coverFileRef}
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => {
-              const f = e.target.files?.[0];
-              if (!f) return;
-              const r = new FileReader();
-              r.onload = () => {
-                setCropSrc(r.result);
-                setCropFor("cover");
-                setCropOpen(true);
-                setZoom(1);
-                setCrop({ x: 0, y: 0 });
-              };
-              r.readAsDataURL(f);
+    <ErrorBoundary>
+      <div style={{ minHeight: "100vh", background: "#0f1115", color: "white" }}>
+        <div style={{ maxWidth: 980, margin: "0 auto", padding: 24 }}>
+          {/* Titel + logout */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
             }}
-          />
-          <button
-            onClick={() => coverFileRef.current?.click()}
-            style={btn("ghost-sm")}
           >
-            Skift cover
-          </button>
-        </div>
+            <h1 style={{ fontSize: 40, fontWeight: 800, margin: 0 }}>
+              Fløng Ølklub 🍻
+            </h1>
+            <button onClick={signOut} style={btn("ghost-sm")}>
+              Log ud
+            </button>
+          </div>
 
-        {/* Topbar: Tilføj + Søg */}
-        <div
-          style={{
-            marginTop: 16,
-            display: "flex",
-            justifyContent: "space-between",
-            alignItems: "center",
-            gap: 12,
-          }}
-        >
-          <button onClick={() => setAddOpen(true)} style={btn("primary")}>
-            Tilføj Øl
-          </button>
-          <input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="Søg øl…"
-            style={{ ...input(), maxWidth: 260 }}
-          />
-        </div>
-
-        {/* Sortering */}
-        <div
-          style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}
-        >
-          <span style={{ opacity: 0.8 }}>Sorter:</span>
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value)}
-            style={input()}
+          {/* Cover */}
+          <div
+            style={{
+              marginTop: 8,
+              width: "100%",
+              height: COVER_H,
+              borderRadius: 12,
+              border: "1px solid #2a2e39",
+              overflow: "hidden",
+              background: coverUrl
+                ? `center / cover no-repeat url(${coverUrl})`
+                : "#161922",
+              display: "grid",
+              placeItems: coverUrl ? "unset" : "center",
+              color: "#8b8f9a",
+            }}
           >
-            <option value="created_at">Nyeste/ældste</option>
-            <option value="rating">Bedømmelse</option>
-            <option value="name">Navn</option>
-            <option value="style">Stil</option>
-            <option value="price">Pris</option>
-          </select>
-          <select
-            value={sortDir}
-            onChange={(e) => setSortDir(e.target.value)}
-            style={input()}
+            {!coverUrl && "(intet cover)"}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              display: "flex",
+              justifyContent: "flex-end",
+            }}
           >
-            <option value="desc">Faldende</option>
-            <option value="asc">Stigende</option>
-          </select>
-        </div>
-
-        {/* Liste */}
-        <section style={{ marginTop: 16 }}>
-          {beers.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>
-              Ingen øl endnu – brug “Tilføj Øl” 🍺
-            </div>
-          ) : (
-            <div
-              style={{
-                display: "grid",
-                gap: 12,
-                gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+            <input
+              ref={coverFileRef}
+              type="file"
+              accept="image/*"
+              style={{ display: "none" }}
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (!f) return;
+                const r = new FileReader();
+                r.onload = () => {
+                  setCropSrc(r.result);
+                  setCropFor("cover");
+                  setCropOpen(true);
+                  setZoom(1);
+                  setCrop({ x: 0, y: 0 });
+                };
+                r.readAsDataURL(f);
               }}
+            />
+            <button
+              onClick={() => coverFileRef.current?.click()}
+              style={btn("ghost-sm")}
             >
-              {beers.map((b) => (
-                <article key={b.id} style={card({ padding: 0 })}>
-                  <div style={{ display: "flex", flexWrap: "wrap" }}>
-                    {/* venstre: billede */}
-                    {photoUrls[b.id] ? (
-                      <img
-                        src={photoUrls[b.id]}
-                        alt={b.name}
-                        style={{
-                          width: IMG_W,
-                          height: IMG_H,
-                          objectFit: "cover",
-                          borderTopLeftRadius: 14,
-                          borderBottomLeftRadius: 14,
-                        }}
-                      />
-                    ) : (
-                      <div
-                        style={{
-                          width: IMG_W,
-                          height: IMG_H,
-                          display: "grid",
-                          placeItems: "center",
-                          background: "#161922",
-                          color: "#8b8f9a",
-                          borderTopLeftRadius: 14,
-                          borderBottomLeftRadius: 14,
-                        }}
-                      >
-                        (intet billede)
-                      </div>
-                    )}
+              Skift cover
+            </button>
+          </div>
 
-                    {/* højre: tekst */}
-                    <div style={{ flex: 1, minWidth: 200, padding: 12 }}>
-                      <div
-                        style={{
-                          fontWeight: 800,
-                          fontSize: 22,
-                          marginBottom: 2,
-                        }}
-                      >
-                        {b.name || "(uden navn)"}
-                      </div>
-                      <div style={{ opacity: 0.9, fontSize: 16 }}>
-                        {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b>{" "}
-                        {b.color || "—"}
-                      </div>
-                      <div style={{ opacity: 0.85, marginTop: 6, fontSize: 16 }}>
-                        Pris: {b.price || "—"}
-                      </div>
-                      <div style={{ marginTop: 8 }}>
-                        <Stars value={b.rating ?? 0} onChange={() => {}} />
-                      </div>
-                      <div
-                        style={{
-                          marginTop: 8,
-                          display: "flex",
-                          gap: 8,
-                          flexWrap: "wrap",
-                        }}
-                      >
-                        <button
-                          onClick={() => {
-                            setEditing(b);
-                            setEditDraft({
-                              name: b.name || "",
-                              brewery: b.brewery || "",
-                              style: b.style || "",
-                              color: b.color || "",
-                              price: b.price || "",
-                              rating: b.rating || 0,
-                              photoDataUrl: "",
-                            });
+          {/* Topbar */}
+          <div
+            style={{
+              marginTop: 16,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+            }}
+          >
+            <button onClick={() => setAddOpen(true)} style={btn("primary")}>
+              Tilføj Øl
+            </button>
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Søg øl…"
+              style={{ ...input(), maxWidth: 260 }}
+            />
+          </div>
+
+          {/* Sortering */}
+          <div
+            style={{ marginTop: 12, display: "flex", gap: 8, alignItems: "center" }}
+          >
+            <span style={{ opacity: 0.8 }}>Sorter:</span>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={input()}
+            >
+              <option value="created_at">Nyeste/ældste</option>
+              <option value="rating">Bedømmelse</option>
+              <option value="name">Navn</option>
+              <option value="style">Stil</option>
+              <option value="price">Pris</option>
+            </select>
+            <select
+              value={sortDir}
+              onChange={(e) => setSortDir(e.target.value)}
+              style={input()}
+            >
+              <option value="desc">Faldende</option>
+              <option value="asc">Stigende</option>
+            </select>
+          </div>
+
+          {/* Liste */}
+          <section style={{ marginTop: 16 }}>
+            {beers.length === 0 ? (
+              <div style={{ opacity: 0.7 }}>
+                Ingen øl endnu – brug “Tilføj Øl” 🍺
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "grid",
+                  gap: 12,
+                  gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))",
+                }}
+              >
+                {beers.map((b) => (
+                  <article key={b.id} style={card({ padding: 0 })}>
+                    <div style={{ display: "flex", flexWrap: "wrap" }}>
+                      {photoUrls[b.id] ? (
+                        <img
+                          src={photoUrls[b.id]}
+                          alt={b.name}
+                          style={{
+                            width: IMG_W,
+                            height: IMG_H,
+                            objectFit: "cover",
+                            borderTopLeftRadius: 14,
+                            borderBottomLeftRadius: 14,
                           }}
-                          style={btn("ghost-sm")}
+                        />
+                      ) : (
+                        <div
+                          style={{
+                            width: IMG_W,
+                            height: IMG_H,
+                            display: "grid",
+                            placeItems: "center",
+                            background: "#161922",
+                            color: "#8b8f9a",
+                            borderTopLeftRadius: 14,
+                            borderBottomLeftRadius: 14,
+                          }}
                         >
-                          Redigér
-                        </button>
-                        <button
-                          onClick={() => deleteBeer(b)}
-                          style={btn("danger-sm")}
+                          (intet billede)
+                        </div>
+                      )}
+
+                      <div style={{ flex: 1, minWidth: 200, padding: 12 }}>
+                        <div
+                          style={{
+                            fontWeight: 800,
+                            fontSize: 22,
+                            marginBottom: 2,
+                          }}
                         >
-                          Slet
-                        </button>
+                          {b.name || "(uden navn)"}
+                        </div>
+                        <div style={{ opacity: 0.9, fontSize: 16 }}>
+                          {b.brewery || "—"} • {b.style || "—"} • <b>Farve:</b>{" "}
+                          {b.color || "—"}
+                        </div>
+                        <div style={{ opacity: 0.85, marginTop: 6, fontSize: 16 }}>
+                          Pris: {b.price || "—"}
+                        </div>
+                        <div style={{ marginTop: 8 }}>
+                          <Stars value={b.rating ?? 0} onChange={() => {}} />
+                        </div>
+                        <div
+                          style={{
+                            marginTop: 8,
+                            display: "flex",
+                            gap: 8,
+                            flexWrap: "wrap",
+                          }}
+                        >
+                          <button
+                            onClick={() => {
+                              setEditing(b);
+                              setEditDraft({
+                                name: b.name || "",
+                                brewery: b.brewery || "",
+                                style: b.style || "",
+                                color: b.color || "",
+                                price: b.price || "",
+                                rating: b.rating || 0,
+                                photoDataUrl: "",
+                              });
+                            }}
+                            style={btn("ghost-sm")}
+                          >
+                            Redigér
+                          </button>
+                          <button
+                            onClick={() => deleteBeer(b)}
+                            style={btn("danger-sm")}
+                          >
+                            Slet
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </article>
-              ))}
-            </div>
-          )}
-        </section>
-      </div>
-
-      {/* ADD MODAL */}
-      {addOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.6)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 50,
-          }}
-        >
-          <div
-            style={{
-              background: "#0b0d12",
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid #2a2e39",
-              width: "min(720px, 92vw)",
-            }}
-          >
-            <h3 style={{ marginTop: 0 }}>Tilføj Øl</h3>
-            <div
-              style={{
-                display: "grid",
-                gap: 8,
-                gridTemplateColumns: "repeat(2, 1fr)",
-              }}
-            >
-              <input
-                style={input()}
-                placeholder="Navn*"
-                value={draft.name}
-                onChange={(e) => setDraft({ ...draft, name: e.target.value })}
-              />
-              <input
-                style={input()}
-                placeholder="Bryggeri"
-                value={draft.brewery}
-                onChange={(e) => setDraft({ ...draft, brewery: e.target.value })}
-              />
-              <input
-                style={input()}
-                placeholder="Stil"
-                value={draft.style}
-                onChange={(e) => setDraft({ ...draft, style: e.target.value })}
-              />
-              <input
-                style={input()}
-                placeholder="Farve (fx Gylden / Amber / Mørk)"
-                value={draft.color}
-                onChange={(e) => setDraft({ ...draft, color: e.target.value })}
-              />
-              <input
-                style={input()}
-                placeholder="Pris"
-                value={draft.price}
-                onChange={(e) => setDraft({ ...draft, price: e.target.value })}
-              />
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <Stars
-                  value={draft.rating}
-                  onChange={(v) => setDraft({ ...draft, rating: v })}
-                />
+                  </article>
+                ))}
               </div>
-              <input
-                ref={addFileRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const r = new FileReader();
-                  r.onload = () => {
-                    setCropSrc(r.result);
-                    setCropFor("create");
-                    setCropOpen(true);
-                    setZoom(1);
-                    setCrop({ x: 0, y: 0 });
-                  };
-                  r.readAsDataURL(f);
-                }}
-                style={{ ...input(), gridColumn: "1 / -1" }}
-              />
-            </div>
-            {draft.photoDataUrl && (
-              <img
-                alt="preview"
-                src={draft.photoDataUrl}
-                style={{
-                  marginTop: 12,
-                  width: "100%",
-                  maxHeight: 260,
-                  objectFit: "cover",
-                  borderRadius: 12,
-                  border: "1px solid #333",
-                }}
-              />
             )}
-            <div
-              style={{
-                marginTop: 12,
-                display: "flex",
-                gap: 8,
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={() => setAddOpen(false)}
-                style={btn("ghost-sm")}
-              >
-                Annuller
-              </button>
-              <button onClick={addBeer} style={btn("primary")}>
-                Gem
-              </button>
-            </div>
-          </div>
+          </section>
         </div>
-      )}
 
-      {/* EDIT MODAL */}
-      {editing && editDraft && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.6)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 50,
-          }}
-        >
+        {/* ADD MODAL */}
+        {addOpen && (
           <div
             style={{
-              background: "#0b0d12",
-              padding: 16,
-              borderRadius: 12,
-              border: "1px solid #2a2e39",
-              width: "min(720px, 92vw)",
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,.6)",
+              display: "grid",
+              placeItems: "center",
+              zIndex: 50,
             }}
           >
-            <h3 style={{ marginTop: 0 }}>Redigér: {editing.name}</h3>
             <div
               style={{
-                display: "grid",
-                gap: 8,
-                gridTemplateColumns: "repeat(2, 1fr)",
+                background: "#0b0d12",
+                padding: 16,
+                borderRadius: 12,
+                border: "1px solid #2a2e39",
+                width: "min(720px, 92vw)",
               }}
             >
-              <input
-                style={input()}
-                placeholder="Navn"
-                value={editDraft.name}
-                onChange={(e) =>
-                  setEditDraft({ ...editDraft, name: e.target.value })
-                }
-              />
-              <input
-                style={input()}
-                placeholder="Bryggeri"
-                value={editDraft.brewery}
-                onChange={(e) =>
-                  setEditDraft({ ...editDraft, brewery: e.target.value })
-                }
-              />
-              <input
-                style={input()}
-                placeholder="Stil"
-                value={editDraft.style}
-                onChange={(e) =>
-                  setEditDraft({ ...editDraft, style: e.target.value })
-                }
-              />
-              <input
-                style={input()}
-                placeholder="Farve"
-                value={editDraft.color}
-                onChange={(e) =>
-                  setEditDraft({ ...editDraft, color: e.target.value })
-                }
-              />
-              <input
-                style={input()}
-                placeholder="Pris"
-                value={editDraft.price}
-                onChange={(e) =>
-                  setEditDraft({ ...editDraft, price: e.target.value })
-                }
-              />
-              <div style={{ display: "flex", alignItems: "center" }}>
-                <Stars
-                  value={editDraft.rating}
-                  onChange={(v) =>
-                    setEditDraft({ ...editDraft, rating: v })
+              <h3 style={{ marginTop: 0 }}>Tilføj Øl</h3>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                }}
+              >
+                <input
+                  style={input()}
+                  placeholder="Navn*"
+                  value={draft.name}
+                  onChange={(e) => setDraft({ ...draft, name: e.target.value })}
+                />
+                <input
+                  style={input()}
+                  placeholder="Bryggeri"
+                  value={draft.brewery}
+                  onChange={(e) =>
+                    setDraft({ ...draft, brewery: e.target.value })
                   }
                 />
+                <input
+                  style={input()}
+                  placeholder="Stil"
+                  value={draft.style}
+                  onChange={(e) => setDraft({ ...draft, style: e.target.value })}
+                />
+                <input
+                  style={input()}
+                  placeholder="Farve (fx Gylden / Amber / Mørk)"
+                  value={draft.color}
+                  onChange={(e) => setDraft({ ...draft, color: e.target.value })}
+                />
+                <input
+                  style={input()}
+                  placeholder="Pris"
+                  value={draft.price}
+                  onChange={(e) => setDraft({ ...draft, price: e.target.value })}
+                />
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <Stars
+                    value={draft.rating}
+                    onChange={(v) => setDraft({ ...draft, rating: v })}
+                  />
+                </div>
+                <input
+                  ref={addFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onload = () => {
+                      setCropSrc(r.result);
+                      setCropFor("create");
+                      setCropOpen(true);
+                      setZoom(1);
+                      setCrop({ x: 0, y: 0 });
+                    };
+                    r.readAsDataURL(f);
+                  }}
+                  style={{ ...input(), gridColumn: "1 / -1" }}
+                />
               </div>
-              <input
-                ref={editFileRef}
-                type="file"
-                accept="image/*"
-                onChange={(e) => {
-                  const f = e.target.files?.[0];
-                  if (!f) return;
-                  const r = new FileReader();
-                  r.onload = () => {
-                    setCropSrc(r.result);
-                    setCropFor("edit");
-                    setCropOpen(true);
-                    setZoom(1);
-                    setCrop({ x: 0, y: 0 });
-                  };
-                  r.readAsDataURL(f);
-                }}
-                style={{ ...input(), gridColumn: "1 / -1" }}
-              />
-            </div>
-            {editDraft.photoDataUrl && (
-              <img
-                alt="preview"
-                src={editDraft.photoDataUrl}
+              {draft.photoDataUrl && (
+                <img
+                  alt="preview"
+                  src={draft.photoDataUrl}
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    maxHeight: 260,
+                    objectFit: "cover",
+                    borderRadius: 12,
+                    border: "1px solid #333",
+                  }}
+                />
+              )}
+              <div
                 style={{
                   marginTop: 12,
-                  width: "100%",
-                  maxHeight: 260,
-                  objectFit: "cover",
-                  borderRadius: 12,
-                  border: "1px solid #333",
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
                 }}
-              />
-            )}
-            <div
-              style={{
-                marginTop: 12,
-                display: "flex",
-                gap: 8,
-                justifyContent: "flex-end",
-              }}
-            >
-              <button
-                onClick={() => {
-                  setEditing(null);
-                  setEditDraft(null);
-                }}
-                style={btn("ghost-sm")}
               >
-                Annuller
-              </button>
-              <button onClick={updateBeer} style={btn("primary")}>
-                Gem
-              </button>
+                <button
+                  onClick={() => setAddOpen(false)}
+                  style={btn("ghost-sm")}
+                >
+                  Annuller
+                </button>
+                <button onClick={addBeer} style={btn("primary")}>
+                  Gem
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Cropper modal */}
-      {cropOpen && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,.75)",
-            display: "grid",
-            placeItems: "center",
-            zIndex: 60,
-          }}
-        >
+        {/* EDIT MODAL */}
+        {editing && editDraft && (
           <div
             style={{
-              width: "min(720px, 92vw)",
-              background: "#0b0d12",
-              border: "1px solid #2a2e39",
-              borderRadius: 14,
-              padding: 16,
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,.6)",
+              display: "grid",
+              placeItems: "center",
+              zIndex: 50,
             }}
           >
-            <h3 style={{ marginTop: 0 }}>Beskær billede</h3>
             <div
               style={{
-                position: "relative",
-                width: "100%",
-                height: 360,
-                background: "#111",
+                background: "#0b0d12",
+                padding: 16,
                 borderRadius: 12,
-                overflow: "hidden",
+                border: "1px solid #2a2e39",
+                width: "min(720px, 92vw)",
               }}
             >
-              <Cropper
-                image={cropSrc}
-                crop={crop}
-                zoom={zoom}
-                aspect={cropFor === "cover" ? COVER_ASPECT : PORTRAIT_ASPECT}
-                onCropChange={setCrop}
-                onZoomChange={setZoom}
-                onCropComplete={onCropComplete}
-                restrictPosition
-              />
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: 12,
-                marginTop: 12,
-              }}
-            >
-              <span style={{ opacity: 0.8, fontSize: 14 }}>Zoom</span>
-              <input
-                type="range"
-                min={1}
-                max={3}
-                step={0.01}
-                value={zoom}
-                onChange={(e) => setZoom(Number(e.target.value))}
-                style={{ flex: 1 }}
-              />
-              <button onClick={() => setCropOpen(false)} style={btn("ghost-sm")}>
-                Annuller
-              </button>
-              <button onClick={confirmCrop} style={btn("primary")}>
-                Brug udsnit
-              </button>
+              <h3 style={{ marginTop: 0 }}>Redigér: {editing.name}</h3>
+              <div
+                style={{
+                  display: "grid",
+                  gap: 8,
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                }}
+              >
+                <input
+                  style={input()}
+                  placeholder="Navn"
+                  value={editDraft.name}
+                  onChange={(e) =>
+                    setEditDraft({ ...editDraft, name: e.target.value })
+                  }
+                />
+                <input
+                  style={input()}
+                  placeholder="Bryggeri"
+                  value={editDraft.brewery}
+                  onChange={(e) =>
+                    setEditDraft({ ...editDraft, brewery: e.target.value })
+                  }
+                />
+                <input
+                  style={input()}
+                  placeholder="Stil"
+                  value={editDraft.style}
+                  onChange={(e) =>
+                    setEditDraft({ ...editDraft, style: e.target.value })
+                  }
+                />
+                <input
+                  style={input()}
+                  placeholder="Farve"
+                  value={editDraft.color}
+                  onChange={(e) =>
+                    setEditDraft({ ...editDraft, color: e.target.value })
+                  }
+                />
+                <input
+                  style={input()}
+                  placeholder="Pris"
+                  value={editDraft.price}
+                  onChange={(e) =>
+                    setEditDraft({ ...editDraft, price: e.target.value })
+                  }
+                />
+                <div style={{ display: "flex", alignItems: "center" }}>
+                  <Stars
+                    value={editDraft.rating}
+                    onChange={(v) =>
+                      setEditDraft({ ...editDraft, rating: v })
+                    }
+                  />
+                </div>
+                <input
+                  ref={editFileRef}
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (!f) return;
+                    const r = new FileReader();
+                    r.onload = () => {
+                      setCropSrc(r.result);
+                      setCropFor("edit");
+                      setCropOpen(true);
+                      setZoom(1);
+                      setCrop({ x: 0, y: 0 });
+                    };
+                    r.readAsDataURL(f);
+                  }}
+                  style={{ ...input(), gridColumn: "1 / -1" }}
+                />
+              </div>
+              {editDraft?.photoDataUrl && (
+                <img
+                  alt="preview"
+                  src={editDraft.photoDataUrl}
+                  style={{
+                    marginTop: 12,
+                    width: "100%",
+                    maxHeight: 260,
+                    objectFit: "cover",
+                    borderRadius: 12,
+                    border: "1px solid #333",
+                  }}
+                />
+              )}
+              <div
+                style={{
+                  marginTop: 12,
+                  display: "flex",
+                  gap: 8,
+                  justifyContent: "flex-end",
+                }}
+              >
+                <button
+                  onClick={() => {
+                    setEditing(null);
+                    setEditDraft(null);
+                  }}
+                  style={btn("ghost-sm")}
+                >
+                  Annuller
+                </button>
+                <button onClick={updateBeer} style={btn("primary")}>
+                  Gem
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
-    </div>
+        )}
+
+        {/* Cropper modal */}
+        {cropOpen && (
+          <div
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,.75)",
+              display: "grid",
+              placeItems: "center",
+              zIndex: 60,
+            }}
+          >
+            <div
+              style={{
+                width: "min(720px, 92vw)",
+                background: "#0b0d12",
+                border: "1px solid #2a2e39",
+                borderRadius: 14,
+                padding: 16,
+              }}
+            >
+              <h3 style={{ marginTop: 0 }}>Beskær billede</h3>
+              <div
+                style={{
+                  position: "relative",
+                  width: "100%",
+                  height: 360,
+                  background: "#111",
+                  borderRadius: 12,
+                  overflow: "hidden",
+                }}
+              >
+                <Cropper
+                  image={cropSrc}
+                  crop={crop}
+                  zoom={zoom}
+                  aspect={cropFor === "cover" ? COVER_ASPECT : PORTRAIT_ASPECT}
+                  onCropChange={setCrop}
+                  onZoomChange={setZoom}
+                  onCropComplete={onCropComplete}
+                  restrictPosition
+                />
+              </div>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: 12,
+                  marginTop: 12,
+                }}
+              >
+                <span style={{ opacity: 0.8, fontSize: 14 }}>Zoom</span>
+                <input
+                  type="range"
+                  min={1}
+                  max={3}
+                  step={0.01}
+                  value={zoom}
+                  onChange={(e) => setZoom(Number(e.target.value))}
+                  style={{ flex: 1 }}
+                />
+                <button onClick={() => setCropOpen(false)} style={btn("ghost-sm")}>
+                  Annuller
+                </button>
+                <button onClick={confirmCrop} style={btn("primary")}>
+                  Brug udsnit
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    </ErrorBoundary>
   );
 }

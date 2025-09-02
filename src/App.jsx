@@ -277,13 +277,16 @@ function AuthedApp({ user }) {
   }
 
   return (
-    <div style={{ minHeight:"100vh", background:"#0f1115", color:"white" }}>
+    <div style={{ minHeight:"100vh", background:"#0f1115", color:"white", overflowX:"hidden", touchAction:"manipulation" }}>
       <div style={{ maxWidth:980, margin:"0 auto", padding:24 }}>
         {/* Titel */}
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", gap:12 }}>
-          <h1 style={{ fontSize:40, fontWeight:800, margin:0 }}>
-            Fløng Ølklub 🍻 <span style={{opacity:.5,fontSize:16}}>v11</span>
-          </h1>
+          {/* venstre: titel + emoji */}
+          <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+            <h1 style={{ fontSize:32, fontWeight:800, margin:0 }}>Fløng Ølklub</h1>
+            <span aria-hidden="true" style={{ fontSize:28, lineHeight:1 }}>🍻</span>
+          </div>
+          {/* højre: knap */}
           <button onClick={signOut} style={btn("ghost-sm")}>Log ud</button>
         </div>
 

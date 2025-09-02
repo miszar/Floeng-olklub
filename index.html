@@ -6,24 +6,29 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
     />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
+
     <title>Fløng Ølklub</title>
 
     <!-- Ikon & PWA -->
     <link rel="icon" href="/vite.svg" />
     <link rel="manifest" href="/manifest.json" />
-    <meta name="theme-color" content="#111111" />
+    <meta name="theme-color" content="#0f1115" />
 
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
-    <!-- Globalt layout/gestures – gør PWA mere "app-agtig" og symmetrisk -->
     <style>
-      html, body { margin: 0; padding: 0; height: 100%; overflow-x: hidden; background: #0f1115; }
-      /* Mindsker uønskede gestures/bounce og “skub til siden” */
-      body { overscroll-behavior-y: none; touch-action: manipulation;
-             padding-left: env(safe-area-inset-left); padding-right: env(safe-area-inset-right); }
+      html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
+      /* Fjern“skub til siden”/bounce */
+      html, body { overflow-x: hidden; overscroll-behavior: none; }
+      body { touch-action: manipulation;
+             padding-left: env(safe-area-inset-left);
+             padding-right: env(safe-area-inset-right); }
       #root { min-height: 100%; }
       img { max-width: 100%; height: auto; }
     </style>

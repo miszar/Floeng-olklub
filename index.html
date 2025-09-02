@@ -1,21 +1,31 @@
 <!doctype html>
-<html lang="en">
+<html lang="da">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Vite + React</title>
-<link rel="manifest" href="/manifest.json" />
-<meta name="theme-color" content="#111111" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
+    />
+    <title>Fløng Ølklub</title>
 
-<!-- iOS fullscreen + statusbar -->
-<meta name="apple-mobile-web-app-capable" content="yes" />
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-<link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <!-- Ikon & PWA -->
+    <link rel="icon" href="/vite.svg" />
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#111111" />
 
-<!-- Mobil viewport -->
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1" />
+    <!-- iOS PWA -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
+    <!-- Globalt layout/gestures – gør PWA mere "app-agtig" -->
+    <style>
+      html, body { margin: 0; padding: 0; height: 100%; overflow-x: hidden; background: #0f1115; }
+      /* Mindsker uønskede gestures/bounce og gør det sværere at “skubbe til siden” */
+      body { overscroll-behavior-y: none; touch-action: manipulation; }
+      #root { min-height: 100%; }
+      img { max-width: 100%; height: auto; }
+    </style>
   </head>
   <body>
     <div id="root"></div>

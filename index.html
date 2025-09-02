@@ -20,30 +20,22 @@
     <!-- iOS PWA -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="apple-touch-icon" href="/icons/icon-192.png" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
 
     <!-- 0) Anti-scroll / anti-autofocus / pin i top -->
     <script>
       (function () {
         try {
           if ("scrollRestoration" in history) history.scrollRestoration = "manual";
-
-          // Fjern evt. fokus (så select/input ikke scroller i view)
-          function blurActive() {
-            try { document.activeElement && document.activeElement.blur && document.activeElement.blur(); } catch {}
-          }
-          addEventListener("DOMContentLoaded", blurActive, { once: true });
-
-          // Hold siden i top 3s (så selv sene layout-shifts ikke hopper)
+          function blurActive(){ try{ document.activeElement && document.activeElement.blur && document.activeElement.blur(); }catch{} }
+          addEventListener("DOMContentLoaded", blurActive, { once:true });
           let tries = 0;
           const id = setInterval(() => {
             window.scrollTo(0, 0);
             blurActive();
-            if (++tries > 60) clearInterval(id); // 60 * 50ms = 3s
+            if (++tries > 60) clearInterval(id); // ~3s
           }, 50);
-          // Og en ekstra sikkerhed når alt er loadet
-          addEventListener("load", () => { window.scrollTo(0, 0); blurActive(); }, { once: true });
-          // Når fanen bliver synlig igen
+          addEventListener("load", () => { window.scrollTo(0, 0); blurActive(); }, { once:true });
           addEventListener("visibilitychange", () => {
             if (document.visibilityState === "visible") { window.scrollTo(0, 0); blurActive(); }
           });
@@ -64,7 +56,7 @@
     <!-- 2) Nuke SW/caches når version ændres -->
     <script>
       (async function () {
-        const VERSION = "pwa-9";
+        const VERSION = "pwa-10";
         try {
           const prev = localStorage.getItem("APP_VERSION");
           if (prev !== VERSION) {
@@ -89,9 +81,7 @@
 
     <style>
       html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
-      html, body { overflow-x: hidden; overscroll-behavior: none; }
-      /* Slå scroll anchoring fra – så Chrome ikke "holder" samme udsnit når ovenfor ændrer højde */
-      html, body { overflow-anchor: none; }
+      html, body { overflow-x: hidden; overscroll-behavior: none; overflow-anchor: none; }
       body {
         touch-action: manipulation;
         padding-left: env(safe-area-inset-left);

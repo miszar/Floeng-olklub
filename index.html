@@ -6,6 +6,7 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, viewport-fit=cover, maximum-scale=1"
     />
+    <!-- no-cache for sikkerheds skyld -->
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
@@ -22,19 +23,60 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <link rel="apple-touch-icon" href="/icons/icon-192.png" />
 
+    <!-- Canonical redirect + Cache Nuke (kører før app'en loader) -->
+    <script>
+      (function () {
+        // 1) Lås til korrekt domæne (hvis man lander på en gammel preview-URL)
+        var CANON = "floeng-olklub.vercel.app";
+        if (location.host !== CANON && /\.vercel\.app$/.test(location.host)) {
+          location.replace(location.protocol + "//" + CANON + location.pathname + location.search + location.hash);
+          return;
+        }
+      })();
+    </script>
+    <script>
+      (async function () {
+        // 2) Nuker SW, caches og storage når version ændres
+        const VERSION = "pwa-7"; // bump hvis du vil tvinge endnu et frisk load
+        try {
+          const prev = localStorage.getItem("APP_VERSION");
+          if (prev !== VERSION) {
+            if ("caches" in window) {
+              const keys = await caches.keys();
+              await Promise.all(keys.map((k) => caches.delete(k)));
+            }
+            if ("serviceWorker" in navigator) {
+              const regs = await navigator.serviceWorker.getRegistrations();
+              await Promise.all(regs.map((r) => r.unregister()));
+            }
+            sessionStorage.clear();
+            // bevar ikke anden app-state – vi vil af med alt gammelt
+            localStorage.clear();
+            localStorage.setItem("APP_VERSION", VERSION);
+          }
+        } catch (e) {
+          // stille fejl – vi prøver bare igen næste gang
+          console.warn("PWA nuke error:", e);
+        }
+      })();
+    </script>
+
+    <!-- Globalt layout/gestures – gør PWA mere "app-agtig" og symmetrisk -->
     <style>
       html, body { margin: 0; padding: 0; height: 100%; background: #0f1115; }
-      /* Fjern“skub til siden”/bounce */
       html, body { overflow-x: hidden; overscroll-behavior: none; }
-      body { touch-action: manipulation;
-             padding-left: env(safe-area-inset-left);
-             padding-right: env(safe-area-inset-right); }
+      body {
+        touch-action: manipulation;
+        padding-left: env(safe-area-inset-left);
+        padding-right: env(safe-area-inset-right);
+      }
       #root { min-height: 100%; }
       img { max-width: 100%; height: auto; }
     </style>
   </head>
   <body>
     <div id="root"></div>
+    <!-- Vite omskriver dette til hashed assets ved build -->
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
